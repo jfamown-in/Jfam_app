@@ -36,3 +36,9 @@ No local Supabase config/schema baseline, test project, synthetic accounts, depl
 - `node --check script.js`: PASS.
 - `npm run cap:sync`: PASS; Capacitor detected `@capacitor/geolocation@7.1.8`.
 - Android `assembleDebug`: BLOCKED; Android SDK location is not configured on this machine. This is an environment blocker, not a verified compilation failure.
+
+## Order-flow UI verification — 2026-10-10
+
+- **PASS (frontend journey):** Product selection, one-time plan, delivery slot/date, cart, address selection, price breakdown, and payment-method screen all rendered in the local in-app browser.
+- **PASS (security regression):** Selecting Cash on Delivery reached the secure checkout block and displayed `Secure checkout is being activated. No order has been created.` No order, payment, wallet transaction, or external payment request was created.
+- **NOT RUN:** UPI creation/payment confirmation, webhook verification, server checkout RPC, wallet debit and delivery occurrence creation remain unavailable by design until the backend implementation exists.

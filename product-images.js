@@ -6,7 +6,7 @@
   2. FEATURED_PRODUCT_IMAGES: home featured product images
   3. ALL_PRODUCT_IMAGES: all products screen images
 
-  Use local paths like "images/COW MILK.png" or full URLs.
+  Use local paths like "images/products/raw-cow-milk.png" or full URLs.
   If a value is blank, that image slot stays blank.
 */
 

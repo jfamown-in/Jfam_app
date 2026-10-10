@@ -172,42 +172,42 @@ const didUndoJune26Pause = undoSavedPauseForJune26();
     const productCatalog = new Map();
 
 const LOCAL_IMAGE_PATHS = Object.freeze({
-  'A2 ghee.png': 'images/A2 ghee.png',
-  'a2 milk (2).png': 'images/A2 MILK.png',
-  'A2 MILK.png': 'images/A2 MILK.png',
-  'Banner 1.png': 'images/Banner 1.png',
-  'Banner 2.png': 'images/Banner 2.png',
-  'Banner 3.png': 'images/Banner 3.png',
-  'BUFFALO CHAACH .png': 'images/BUFFALO CHAACH.png',
-  'BUFFALO CHAACH.png': 'images/BUFFALO CHAACH.png',
-  'buffalo ghee.png': 'images/buffalo ghee.png',
-  'BUFFALO MILK .png': 'images/BUFFALO MILK.png',
-  'BUFFALO MILK.png': 'images/BUFFALO MILK.png',
-  'BUFFALO MILK (1).png': 'images/BUFFALO MILK (1).png',
-  'BUFFALO MILK (2).png': 'images/BUFFALO MILK (2).png',
-  'buffalo milk.png': 'images/buffalo milk.png',
-  'C chaach .png': 'images/C chaach.png',
-  'C chaach.png': 'images/C chaach.png',
-  'category_chaach.png': 'images/category_chaach.png',
-  'category_ghee.png': 'images/category_ghee.png',
-  'category_milk.png': 'images/category_milk.png',
-  'Chaach.png': 'images/BUFFALO CHAACH.png',
-  'COW CHAACH .png': 'images/COW CHAACH.png',
-  'COW CHAACH.png': 'images/COW CHAACH.png',
-  'COW GHEE .png': 'images/COWW GHEEE.png',
-  'COWW GHEEE.png': 'images/COWW GHEEE.png',
-  'cow ghee.png': 'images/COWW GHEEE.png',
-  'COW MILK.png': 'images/COW MILK.png',
-  'DAHI (1).png': 'images/DAHI (1).png',
-  'Dahi.png': 'images/DAHI (1).png',
-  'DESIGN END.png': 'images/DESIGN END.png',
-  'Ghee.png': 'images/A2 ghee.png',
-  'login-logo.png': 'images/login-logo.png',
-  'Milk.png': 'images/COW MILK.png',
-  'mr-milk-logo-cropped.png': 'images/mr-milk-logo-cropped.png',
-  'paneer (1).png': 'images/paneer (1).png',
-  'Paneer.png': 'images/paneer (1).png',
-  'See you soon.png': 'images/See you soon.png'
+  'A2 ghee.png': 'images/products/raw-a2-cow-ghee.png',
+  'a2 milk (2).png': 'images/products/raw-a2-cow-milk.png',
+  'A2 MILK.png': 'images/products/raw-a2-cow-milk.png',
+  'Banner 1.png': 'images/brand/hero-1.png',
+  'Banner 2.png': 'images/brand/hero-2.png',
+  'Banner 3.png': 'images/brand/hero-3.png',
+  'BUFFALO CHAACH .png': 'images/products/buffalo-bilona-chaach.png',
+  'BUFFALO CHAACH.png': 'images/products/buffalo-bilona-chaach.png',
+  'buffalo ghee.png': 'images/products/buffalo-ghee.png',
+  'BUFFALO MILK .png': 'images/products/raw-buffalo-milk.png',
+  'BUFFALO MILK.png': 'images/products/raw-buffalo-milk.png',
+  'BUFFALO MILK (1).png': 'images/products/raw-buffalo-milk.png',
+  'BUFFALO MILK (2).png': 'images/products/raw-buffalo-milk.png',
+  'buffalo milk.png': 'images/products/raw-buffalo-milk.png',
+  'C chaach .png': 'images/products/cow-bilona-chaach.png',
+  'C chaach.png': 'images/products/cow-bilona-chaach.png',
+  'category_chaach.png': 'images/products/cow-bilona-chaach.png',
+  'category_ghee.png': 'images/products/cow-ghee.png',
+  'category_milk.png': 'images/products/raw-cow-milk.png',
+  'Chaach.png': 'images/products/buffalo-bilona-chaach.png',
+  'COW CHAACH .png': 'images/products/cow-bilona-chaach.png',
+  'COW CHAACH.png': 'images/products/cow-bilona-chaach.png',
+  'COW GHEE .png': 'images/products/cow-ghee.png',
+  'COWW GHEEE.png': 'images/products/cow-ghee.png',
+  'cow ghee.png': 'images/products/cow-ghee.png',
+  'COW MILK.png': 'images/products/raw-cow-milk.png',
+  'DAHI (1).png': 'images/products/dahi.png',
+  'Dahi.png': 'images/products/dahi.png',
+  'DESIGN END.png': 'images/brand/delivery-scooter.png',
+  'Ghee.png': 'images/products/raw-a2-cow-ghee.png',
+  'login-logo.png': 'images/brand/jfam-logo.png',
+  'Milk.png': 'images/products/raw-cow-milk.png',
+  'mr-milk-logo-cropped.png': 'images/brand/jfam-logo.png',
+  'paneer (1).png': 'images/products/paneer.png',
+  'Paneer.png': 'images/products/paneer.png',
+  'See you soon.png': 'images/brand/jfam-logo.png'
 });
 
 function getInlineImageSrc(fileName) {
@@ -432,17 +432,19 @@ if (window.MutationObserver) {
 
 function getProductImagePath(productName, fallback = "") {
   const name = normalizeProductName(productName);
+  const configuredImage = getAllProductImage(name);
+  if (configuredImage) return normalizeAssetPath(configuredImage);
   const productImages = {
-    "RAW BUFFALO MILK": "images/BUFFALO MILK.png",
-    "RAW COW MILK": "images/COW MILK.png",
-    "RAW A2 COW MILK": "images/A2 MILK.png",
-    "BUFFALO BILONA CHAACH": "images/BUFFALO CHAACH.png",
-    "COW BILONA CHAACH": "images/COW CHAACH.png",
-    "BUFFALO GHEE": "images/buffalo ghee.png",
-    "COW GHEE": "images/COWW GHEEE.png",
-    "RAW A2 COW GHEE": "images/A2 ghee.png",
-    "DAHI": "images/DAHI (1).png",
-    "PANEER": "images/paneer (1).png"
+    "RAW BUFFALO MILK": "images/products/raw-buffalo-milk.png",
+    "RAW COW MILK": "images/products/raw-cow-milk.png",
+    "RAW A2 COW MILK": "images/products/raw-a2-cow-milk.png",
+    "BUFFALO BILONA CHAACH": "images/products/buffalo-bilona-chaach.png",
+    "COW BILONA CHAACH": "images/products/cow-bilona-chaach.png",
+    "BUFFALO GHEE": "images/products/buffalo-ghee.png",
+    "COW GHEE": "images/products/cow-ghee.png",
+    "RAW A2 COW GHEE": "images/products/raw-a2-cow-ghee.png",
+    "DAHI": "images/products/dahi.png",
+    "PANEER": "images/products/paneer.png"
     
   };
 
@@ -1041,7 +1043,7 @@ function showPaymentSuccessScreen() {
   clearTimeout(paymentSuccessTimer);
   const successLogo = document.querySelector('#success-screen .login-top-image');
   if (successLogo) {
-    setImageSrcWithFallback(successLogo, "images/mr-milk-logo-cropped.png", "M.R Milk logo");
+    setImageSrcWithFallback(successLogo, "images/brand/jfam-logo.png", "JFAM logo");
     successLogo.classList.add("payment-success-logo");
   }
   document.querySelector('#success-screen .success-sub').textContent = "Payment";
@@ -7278,9 +7280,9 @@ planModal.addEventListener('click', (e) => {
 const heroImage = document.getElementById("heroImage");
 
 const images = [
-  "images/Banner 1.png",
-  "images/Banner 2.png",
-  "images/Banner 3.png"
+  "images/brand/hero-1.png",
+  "images/brand/hero-2.png",
+  "images/brand/hero-3.png"
 ];
 
 let index = 0;
@@ -9324,7 +9326,7 @@ function getProfileSubscriptionDemoItem() {
       formatLocalDateInput(deliveredDateOne),
       formatLocalDateInput(deliveredDateTwo)
     ],
-    image: "images/COW MILK.png"
+    image: "images/products/raw-cow-milk.png"
   };
 
   try {

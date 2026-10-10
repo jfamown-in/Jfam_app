@@ -40,6 +40,23 @@ button {
   background: none;
 }
 
+/* Clear keyboard focus without changing the existing visual language. */
+:where(button, a, input, select, textarea):focus-visible {
+  outline: 3px solid var(--blue-strong);
+  outline-offset: 3px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* Keep product photography stable while images load on slower mobile networks. */
+.product-card .product-visual,
+.featured-card .featured-visual,
+.category-chip span {
+  contain: layout paint;
+}
+
 /* ================= APP SHELL AND SCREEN SWITCHING =================
    .mobile-app is the phone-like wrapper.
    Only one .screen gets .active at a time from JavaScript.
@@ -194,6 +211,15 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
   .app-splash {
     animation-duration: 0.25s;
   }

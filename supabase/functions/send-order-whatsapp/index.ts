@@ -9,6 +9,7 @@ const corsHeaders = {
 
 type OrderItem = {
   name?: string;
+  product_name?: string;
   quantity?: string;
   packets?: number;
   price?: number;
@@ -16,45 +17,40 @@ type OrderItem = {
   slot?: string;
 };
 
-type OrderPayload = {
-  order?: {
-    id?: string;
-    paymentMode?: string;
-    totalAmount?: number;
-    items?: OrderItem[];
-  };
-  customer?: {
-    name?: string;
-    mobile?: string;
-    email?: string;
-  };
+type OrderPayload = { orderId?: string };
+
+type StoredOrder = {
+  id: string;
+  payment_mode?: string;
+  total_amount?: number;
+  customer_name?: string;
+  customer_phone?: string;
+  order_items?: OrderItem[];
 };
 
 function clean(value: unknown) {
   return String(value ?? "").trim();
 }
 
-function buildMessage(payload: OrderPayload) {
-  const order = payload.order || {};
-  const customer = payload.customer || {};
-  const items = Array.isArray(order.items) ? order.items : [];
+function buildMessage(order: StoredOrder) {
+  const items = Array.isArray(order.order_items) ? order.order_items : [];
   const itemLines = items
     .slice(0, 12)
     .map((item, index) => {
       const qty = [item.quantity, item.packets ? `${item.packets} packet` : ""]
         .filter(Boolean)
         .join(", ");
-      return `${index + 1}. ${clean(item.name)}${qty ? ` (${qty})` : ""}`;
+      return `${index + 1}. ${clean(item.product_name || item.name)}${qty ? ` (${qty})` : ""}`;
     })
     .join("\n");
 
   return [
     "New JFAM order",
     `Order: ${clean(order.id)}`,
-    `Customer: ${clean(customer.name) || "Customer"}`,
-    `Mobile: ${clean(customer.mobile) || "-"}`,
-    `Payment: ${clean(order.paymentMode) || "-"}`,
-    `Total: Rs. ${Math.round(Number(order.totalAmount) || 0)}`,
+    `Customer: ${clean(order.customer_name) || "Customer"}`,
+    `Mobile: ${clean(order.customer_phone) || "-"}`,
+    `Payment: ${clean(order.payment_mode) || "-"}`,
+    `Total: Rs. ${Math.round(Number(order.total_amount) || 0)}`,
     "",
     itemLines || "Items: not available"
   ].join("\n");
@@ -88,6 +84,28 @@ serve(async req => {
   }
 
   const payload = await req.json() as OrderPayload;
+  const orderId = clean(payload.orderId);
+  if (!orderId || orderId.length > 128) {
+    return new Response(JSON.stringify({ error: "Valid orderId required" }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
+  // Never notify from browser-provided totals, items, or customer details.
+  // RLS scopes this lookup to the authenticated order owner.
+  const { data: order, error: orderError } = await supabase
+    .from("orders")
+    .select("id, payment_mode, total_amount, customer_name, customer_phone, order_items(product_name, quantity, packets, price, plan, slot)")
+    .eq("id", orderId)
+    .maybeSingle();
+
+  if (orderError || !order) {
+    return new Response(JSON.stringify({ error: "Order not found" }), {
+      status: 404,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
   const token = Deno.env.get("WHATSAPP_ACCESS_TOKEN");
   const phoneNumberId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID");
   const adminPhone = Deno.env.get("ADMIN_WHATSAPP_PHONE");
@@ -99,7 +117,7 @@ serve(async req => {
     });
   }
 
-  const message = buildMessage(payload);
+  const message = buildMessage(order as StoredOrder);
   const response = await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, {
     method: "POST",
     headers: {

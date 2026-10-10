@@ -1012,12 +1012,9 @@ async function checkRazorpayPaymentStatus() {
 
     if (data.status === "captured" || data.status === "paid") {
       stopRazorpayPaymentPolling();
-      updateRazorpayQrMessage("Payment received", "Confirming your order now.");
-      saveSelectedCartAsSubscribedProducts();
-      completeSelectedCartOrder("UPI (Razorpay)");
-      renderDailyDeliveryCard();
+      updateRazorpayQrMessage("Payment received", "We are verifying it securely. Your order will appear after server confirmation.");
       activeRazorpayAttempt = null;
-      showPaymentSuccessScreen();
+      showToast("Payment received. Waiting for secure server confirmation.");
       return;
     }
 
@@ -1774,13 +1771,8 @@ document.addEventListener('click', (event) => {
       return;
     }
 
-    stopUpiQrTimer();
-    updateRazorpayQrMessage("Payment marked complete", "Confirming your order now.");
-    saveSelectedCartAsSubscribedProducts();
-    completeSelectedCartOrder("UPI");
-    renderDailyDeliveryCard();
-    activeMerchantUpiPayment = null;
-    showPaymentSuccessScreen();
+    updateRazorpayQrMessage("Verification required", "A payment reference must be verified by the server before an order is created.");
+    showToast("Manual UPI confirmation is not available until secure verification is deployed.");
     return;
   }
 
@@ -1800,20 +1792,13 @@ document.addEventListener('click', (event) => {
       return;
     }
 
-    saveSelectedCartAsSubscribedProducts();
-    completeSelectedCartOrder("Cash On Delivery");
-    renderDailyDeliveryCard();
-    showPaymentSuccessScreen();
+    showToast("Secure checkout is being activated. No order has been created.");
     return;
   }
 
   const cardPayBtn = event.target.closest('#cardPayNowBtn');
   if (cardPayBtn && !cardPayBtn.disabled) {
-    saveCardFromCheckoutPayment();
-    saveSelectedCartAsSubscribedProducts();
-    completeSelectedCartOrder("Card");
-    renderDailyDeliveryCard();
-    showPaymentSuccessScreen();
+    showToast("Card checkout is unavailable until server verification is deployed.");
     return;
   }
 
@@ -2639,15 +2624,13 @@ function markDeliveryControlsDirty() {
 }
 
 function getMilkCashTransactions() {
-  try {
-    return JSON.parse(localStorage.getItem("milkCashTransactions")) || [];
-  } catch (error) {
-    return [];
-  }
+  // Browser storage is never an authoritative wallet ledger. Existing values
+  // remain untouched for recovery, but cannot be displayed or spent.
+  return [];
 }
 
 function setMilkCashTransactions(transactions = []) {
-  localStorage.setItem("milkCashTransactions", JSON.stringify(transactions || []));
+  console.warn("Blocked local MilkCash mutation. Use the server wallet service.");
 }
 
 function getMilkCashBalance() {
@@ -2658,15 +2641,7 @@ function getMilkCashBalance() {
 }
 
 function addMilkCashTransaction(transaction) {
-  const transactions = getMilkCashTransactions();
-  transactions.unshift({
-    id: transaction.id || `MC${Date.now()}${Math.floor(Math.random() * 1000)}`,
-    createdAt: transaction.createdAt || new Date().toISOString(),
-    type: Number(transaction.amount) >= 0 ? "credit" : "debit",
-    ...transaction,
-    amount: Number(transaction.amount) || 0
-  });
-  setMilkCashTransactions(transactions);
+  console.warn("Blocked local MilkCash transaction.", transaction?.title || "");
   renderWallet();
 }
 
@@ -4276,6 +4251,12 @@ function saveMilkCashAdjustments(item, adjustments = []) {
 }
 
 function saveDeliveryControlChanges() {
+  // Delivery changes affect fulfilment and wallet balances. They must be
+  // authorized and scheduled by the server, never written into a browser
+  // order draft.
+  showToast("Delivery changes are temporarily unavailable while secure server updates are enabled.");
+  return;
+
   if (!activeDeliveryProduct) return;
 
   const newControls = collectDeliveryControlChanges();
@@ -5397,121 +5378,10 @@ function mrOrderRowToOrder(row) {
 }
 
 async function mrSyncOrdersToDatabase(orders = mrReadPlacedOrders()) {
-  if (localStorage.getItem("isLoggedIn") !== "true") return false;
-
-  orders = mrPreserveOrderDetails(orders || [], mrReadPlacedOrders());
-
-  const sb = mrGetSupabase();
-  const userId = await mrGetCurrentAuthUserId();
-  if (!sb || !userId) return false;
-
-  const orderIds = (orders || [])
-    .map(order => String(order.id || ""))
-    .filter(Boolean);
-  const existingOrderStatusById = new Map();
-
-  if (orderIds.length > 0) {
-    const { data: existingOrders, error: existingOrdersError } = await sb
-      .from("orders")
-      .select("id, status, delivery_status")
-      .eq("user_id", userId)
-      .in("id", orderIds);
-
-    if (existingOrdersError) {
-      console.log(existingOrdersError);
-    } else {
-      (existingOrders || []).forEach(order => {
-        existingOrderStatusById.set(String(order.id), {
-          status: order.status,
-          deliveryStatus: order.delivery_status
-        });
-      });
-    }
-  }
-
-  const orderRows = (orders || []).map(order => ({
-    id: String(order.id || `MR${Date.now()}`),
-    user_id: userId,
-    ordered_at: order.orderedAt || new Date().toISOString(),
-    payment_mode: order.paymentMode || "Cash On Delivery",
-    status: existingOrderStatusById.get(String(order.id || ""))?.status || order.status || "Confirmed",
-    delivery_status: existingOrderStatusById.get(String(order.id || ""))?.deliveryStatus || order.deliveryStatus || "Confirmed",
-    customer_name: order.customerName || "",
-    customer_phone: order.customerPhone || "",
-    customer_email: order.customerEmail || "",
-    address: order.deliveryAddress || order.address || "",
-    delivery_address: order.deliveryAddress || order.address || "",
-    delivery_address_id: order.deliveryAddressId || null,
-    customer_type: order.customerType || "Customer",
-    order_category: order.orderCategory || mrGetOrderCategory(order.items || []),
-    cod_fee: Number(order.codFee ?? getOrderCodFee(order)) || 0,
-    total_amount: calculateOrderPaidTotal(order),
-    updated_at: new Date().toISOString()
-  }));
-
-  const orderItemRows = [];
-  (orders || []).forEach(order => {
-    (order.items || []).forEach((item, itemIndex) => {
-      orderItemRows.push({
-        order_id: String(order.id),
-        user_id: userId,
-        item_index: itemIndex,
-        product_name: String(item.name || ""),
-        price: getBasePrice(item.price),
-        image_url: normalizeAssetPath(item.image),
-        quantity: item.quantity || "",
-        packets: Number(item.packets) || 1,
-        start_date: item.start || null,
-        end_date: item.end || null,
-        slot: item.slot || "",
-        plan: item.plan || "",
-        cancelled: Boolean(item.cancelled),
-        cancelled_at: item.cancelledAt || null,
-        delivery_controls: normalizeDeliveryControls(item.deliveryControls),
-        delivery_controls_summary: getDeliveryControlsSummaryText(item.deliveryControls),
-        updated_at: new Date().toISOString()
-      });
-    });
-  });
-
-  if (orderRows.length > 0 && orderItemRows.length === 0) {
-    console.log("Skipping order sync because order item details are missing.");
-    return false;
-  }
-
-  if (orderRows.length === 0) return true;
-
-  const { error: insertOrdersError } = await sb
-    .from("orders")
-    .upsert(orderRows, { onConflict: "id" });
-
-  if (insertOrdersError) {
-    console.log(insertOrdersError);
-    return false;
-  }
-
-  const { error: deleteItemsError } = await sb
-    .from("order_items")
-    .delete()
-    .eq("user_id", userId);
-
-  if (deleteItemsError) {
-    console.log(deleteItemsError);
-    return false;
-  }
-
-  if (orderItemRows.length === 0) return true;
-
-  const { error: insertItemsError } = await sb
-    .from("order_items")
-    .insert(orderItemRows);
-
-  if (insertItemsError) {
-    console.log(insertItemsError);
-    return false;
-  }
-
-  return true;
+  // Legacy local orders must never be inserted, updated, or used to replace
+  // server orders. The server checkout RPC is the only order writer.
+  console.warn("Blocked legacy browser order synchronization.");
+  return false;
 }
 
 async function mrHydrateOrdersFromDatabase({ preferLocal = false, forceRemote = false } = {}) {
@@ -9099,93 +8969,15 @@ function calculateOrderPaidTotal(order) {
 }
 
 async function mrNotifyAdminAboutOrder(order) {
-  const sb = window.supabaseClient;
-  if (!sb || !order?.id) return;
-
-  try {
-    const { error } = await sb.functions.invoke("send-order-whatsapp", {
-      body: {
-        order,
-        customer: {
-          name: localStorage.getItem("userName") || "",
-          mobile: localStorage.getItem("userMobile") || "",
-          email: localStorage.getItem("userEmail") || ""
-        }
-      }
-    });
-
-    if (error) console.log("Admin WhatsApp notification failed", error);
-  } catch (error) {
-    console.log("Admin WhatsApp notification failed", error);
-  }
+  // Notifications must be emitted only by a trusted server after it creates
+  // the order. Browser-supplied customer and order content is untrusted.
+  console.warn("Blocked client-side order notification.", order?.id || "");
 }
 
 function completeSelectedCartOrder(paymentMode = "Cash On Delivery") {
-  const cart = JSON.parse(localStorage.getItem('cart')) || [];
-  loadSelectedCartItems();
-  const checkoutMode = getCheckoutMode();
-
-  const selectedIndexes = checkoutMode === 'buyNow'
-    ? []
-    : [...selectedCartItems]
-      .map(Number)
-      .filter(index => index >= 0 && index < cart.length);
-
-  const selectedProducts = checkoutMode === 'buyNow'
-    ? getCheckoutItems(cart)
-    : selectedIndexes
-      .map(index => cart[index])
-      .filter(Boolean);
-
-  if (selectedProducts.length === 0) return;
-
-  const orderedAt = new Date().toISOString();
-  const orderId = `MR${Date.now()}${Math.floor(Math.random() * 1000).toString().padStart(3, "0")}`;
-  const codFee = isCodOrder(paymentMode) ? 10 : 0;
-  const milkCashUsed = getMilkCashDiscount();
-  const totalAmount = Math.max(0, calculateOrderTotal(selectedProducts) - milkCashUsed) + codFee;
-  const customerSnapshot = mrGetOrderCustomerSnapshot();
-  const newOrder = {
-    id: orderId,
-    orderedAt,
-    paymentMode,
-    status: "Confirmed",
-    deliveryStatus: "Confirmed",
-    ...customerSnapshot,
-    orderCategory: mrGetOrderCategory(selectedProducts),
-    codFee,
-    milkCashUsed,
-    totalAmount,
-    items: selectedProducts.map(item => ({ ...item }))
-  };
-
-  const orders = getPlacedOrders();
-  orders.unshift(newOrder);
-  setPlacedOrders(orders);
-  mrNotifyAdminAboutOrder(newOrder);
-
-  if (milkCashUsed > 0) {
-    addMilkCashTransaction({
-      amount: -milkCashUsed,
-      title: "Checkout Payment",
-      note: `Used for order ${orderId}`,
-      orderId
-    });
-  }
-
-  const selectedIndexSet = new Set(selectedIndexes);
-  const remainingCart = checkoutMode === 'buyNow'
-    ? cart
-    : cart.filter((_, index) => !selectedIndexSet.has(index));
-  selectedCartItems = new Set();
-  localStorage.removeItem('buyNowItem');
-  localStorage.removeItem('checkoutMode');
-  mrSaveCart(remainingCart);
-  saveSelectedCartItems();
-  updateCartBadge();
-  loadOrders();
-  renderProfileOrders();
-  renderProfileSubscriptions();
+  console.warn("Blocked client-side order creation.", paymentMode);
+  showToast("Secure checkout is temporarily unavailable. No order was created.");
+  return false;
 }
 
 function formatOrderDate(dateValue) {

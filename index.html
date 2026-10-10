@@ -2172,13 +2172,14 @@
       <div class="address-map-head">
         <div>
           <h3>Select Exact Location</h3>
-          <p>Typed address par pin set hoga. Pin drag/tap karke adjust karein.</p>
+          <p>Use your device location or tap the map, then adjust the pin if needed.</p>
         </div>
         <button type="button" id="addressMapCloseBtn">×</button>
       </div>
       <div id="addressMapCanvas"></div>
-      <p class="address-map-selected" id="addressMapSelectedText">Location select karein...</p>
+      <p class="address-map-selected" id="addressMapSelectedText" role="status" aria-live="polite">Location select karein...</p>
       <div class="address-map-actions">
+        <button type="button" id="addressMapLocateBtn">Use My Location</button>
         <button type="button" id="addressMapCancelBtn">Cancel</button>
         <button type="button" id="addressMapUseBtn" disabled>Use This Location</button>
       </div>

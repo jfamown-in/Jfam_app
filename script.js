@@ -2121,6 +2121,12 @@ document.addEventListener('click', (event) => {
     return;
   }
 
+  if (event.target.closest('#addressMapLocateBtn')) {
+    event.preventDefault();
+    useCurrentDeviceLocation();
+    return;
+  }
+
   const addressMapModal = event.target.closest('#addressMapModal');
   if (addressMapModal && event.target.id === 'addressMapModal') {
     event.preventDefault();
@@ -10883,6 +10889,7 @@ const MAP_VERIFY_PREFIXES = [
   'dcAddress'
 ];
 const PILANI_MAP_CENTER = [28.3639, 75.5878];
+const PILANI_SERVICE_RADIUS_KM = 15;
 let activeAddressMapPrefix = null;
 let addressPickerMap = null;
 let addressPickerMarker = null;
@@ -10991,8 +10998,77 @@ function getAddressMapElements() {
     modal: document.getElementById('addressMapModal'),
     canvas: document.getElementById('addressMapCanvas'),
     selectedText: document.getElementById('addressMapSelectedText'),
-    useBtn: document.getElementById('addressMapUseBtn')
+    useBtn: document.getElementById('addressMapUseBtn'),
+    locateBtn: document.getElementById('addressMapLocateBtn')
   };
+}
+
+function isWithinPilaniDeliveryArea(lat, lon) {
+  const toRadians = value => (Number(value) * Math.PI) / 180;
+  const earthRadiusKm = 6371;
+  const deltaLat = toRadians(lat - PILANI_MAP_CENTER[0]);
+  const deltaLon = toRadians(lon - PILANI_MAP_CENTER[1]);
+  const a =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(toRadians(PILANI_MAP_CENTER[0])) *
+      Math.cos(toRadians(lat)) *
+      Math.sin(deltaLon / 2) ** 2;
+  return earthRadiusKm * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))) <= PILANI_SERVICE_RADIUS_KM;
+}
+
+async function useCurrentDeviceLocation() {
+  const { selectedText, useBtn, locateBtn } = getAddressMapElements();
+  if (!activeAddressMapPrefix) return;
+
+  if (selectedText) selectedText.textContent = "Requesting your location…";
+  if (useBtn) useBtn.disabled = true;
+  if (locateBtn) locateBtn.disabled = true;
+
+  try {
+    const nativeGeolocation = window.Capacitor?.Plugins?.Geolocation;
+    let position;
+
+    if (nativeGeolocation?.getCurrentPosition) {
+      const permission = await nativeGeolocation.checkPermissions();
+      const granted = permission.location === "granted" || permission.coarseLocation === "granted";
+      if (!granted) {
+        const requested = await nativeGeolocation.requestPermissions({ permissions: ["location"] });
+        if (requested.location !== "granted" && requested.coarseLocation !== "granted") {
+          throw new Error("Location permission denied");
+        }
+      }
+      position = await nativeGeolocation.getCurrentPosition({
+        enableHighAccuracy: true,
+        timeout: 12000,
+        maximumAge: 30000
+      });
+    } else if (navigator.geolocation) {
+      position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 12000,
+          maximumAge: 30000
+        });
+      });
+    } else {
+      throw new Error("Location is not supported on this device");
+    }
+
+    const lat = Number(position.coords.latitude);
+    const lon = Number(position.coords.longitude);
+    addressPickerMap?.setView([lat, lon], 18);
+    await selectMapPoint(lat, lon, {
+      message: "Your current location is selected. Check the pin before using it."
+    });
+  } catch (error) {
+    if (selectedText) {
+      selectedText.textContent =
+        "Location could not be used. Allow location permission or place the pin manually.";
+    }
+    showToast("Location unavailable. You can still choose a point on the map.");
+  } finally {
+    if (locateBtn) locateBtn.disabled = false;
+  }
 }
 
 function openInAppAddressPicker(prefix) {
@@ -11159,6 +11235,15 @@ async function selectMapPoint(lat, lon, { message = "" } = {}) {
   const { selectedText, useBtn } = getAddressMapElements();
 
   if (!addressPickerMap) return;
+
+  if (!isWithinPilaniDeliveryArea(lat, lon)) {
+    selectedMapAddress = null;
+    if (selectedText) {
+      selectedText.textContent = "This location is outside the current Pilani delivery area.";
+    }
+    if (useBtn) useBtn.disabled = true;
+    return;
+  }
 
   placeAddressPickerMarker(lat, lon);
 

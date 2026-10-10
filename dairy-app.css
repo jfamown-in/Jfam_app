@@ -5628,7 +5628,7 @@ button:disabled {
 
 .address-map-actions{
   display:grid;
-  grid-template-columns:1fr 1fr;
+  grid-template-columns:1fr 1fr 1fr;
   gap:10px;
   padding:0 14px 14px;
 }
@@ -5644,6 +5644,12 @@ button:disabled {
 #addressMapCancelBtn{
   background:#f3f4f6;
   color:#111827;
+}
+
+#addressMapLocateBtn{
+  background:#e7f6ff;
+  color:#14558f;
+  border:1px solid #a8d9ef;
 }
 
 #addressMapUseBtn{

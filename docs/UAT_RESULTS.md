@@ -30,3 +30,9 @@ No local Supabase config/schema baseline, test project, synthetic accounts, depl
 ## Release recommendation
 
 **Do not release checkout, wallet, delivery controls, WhatsApp or payment flows.** Catalog-only browsing is verified. Production readiness requires backup, baseline migrations, authoritative checkout/wallet, RLS tests, webhook verification, and full UAT.
+
+## Location feature verification — 2026-10-10
+
+- `node --check script.js`: PASS.
+- `npm run cap:sync`: PASS; Capacitor detected `@capacitor/geolocation@7.1.8`.
+- Android `assembleDebug`: BLOCKED; Android SDK location is not configured on this machine. This is an environment blocker, not a verified compilation failure.

@@ -1,0 +1,11 @@
+{
+  "appId": "com.jfam.customer",
+  "appName": "JFAM",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}

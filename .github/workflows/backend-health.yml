@@ -1,0 +1,35 @@
+name: JFAM Backend Health
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jfam-backend-health
+  cancel-in-progress: false
+
+jobs:
+  backend-health:
+    name: Read-only Supabase availability check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run read-only backend health check
+        env:
+          JFAM_SUPABASE_URL: ${{ vars.JFAM_SUPABASE_URL }}
+          JFAM_SUPABASE_ANON_KEY: ${{ secrets.JFAM_SUPABASE_ANON_KEY }}
+          JFAM_REQUIRED_RPCS: backend_healthcheck
+          JFAM_EDGE_FUNCTIONS: razorpay-create-qr,razorpay-payment-status
+        run: node scripts/backend-healthcheck.mjs

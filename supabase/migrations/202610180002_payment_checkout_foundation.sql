@@ -283,6 +283,19 @@ create table if not exists public.payment_attempts (
   updated_at timestamptz not null default now()
 );
 
+alter table if exists public.payment_attempts
+  add column if not exists checkout_attempt_id uuid references public.checkout_attempts(id) on delete set null,
+  add column if not exists order_id text references public.orders(id) on delete cascade,
+  add column if not exists provider text not null default 'razorpay',
+  add column if not exists payment_method text,
+  add column if not exists provider_order_id text,
+  add column if not exists provider_qr_id text,
+  add column if not exists provider_payment_id text,
+  add column if not exists qr_image_url text,
+  add column if not exists qr_short_url text,
+  add column if not exists provider_payload jsonb not null default '{}'::jsonb,
+  add column if not exists verified_at timestamptz;
+
 alter table public.payment_attempts enable row level security;
 create index if not exists payment_attempts_user_created_idx on public.payment_attempts(user_id, created_at desc);
 create index if not exists payment_attempts_order_id_idx on public.payment_attempts(order_id);

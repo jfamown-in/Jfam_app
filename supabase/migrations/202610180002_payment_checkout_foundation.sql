@@ -170,12 +170,28 @@ create table if not exists public.order_items (
 
 alter table public.order_items enable row level security;
 alter table if exists public.order_items
+  add column if not exists order_id text,
+  add column if not exists user_id uuid references auth.users(id) on delete cascade,
+  add column if not exists item_index integer,
+  add column if not exists product_name text,
+  add column if not exists price numeric(12,2) not null default 0,
+  add column if not exists image_url text,
+  add column if not exists quantity text,
+  add column if not exists packets integer not null default 1,
+  add column if not exists start_date text,
+  add column if not exists end_date text,
+  add column if not exists slot text,
+  add column if not exists plan text,
+  add column if not exists cancelled boolean not null default false,
+  add column if not exists cancelled_at timestamptz,
+  add column if not exists delivery_controls jsonb not null default '[]'::jsonb,
+  add column if not exists delivery_controls_summary text,
   add column if not exists unit_price_snapshot numeric(12,2) not null default 0,
   add column if not exists line_total_snapshot numeric(12,2) not null default 0,
   add column if not exists product_snapshot jsonb not null default '{}'::jsonb;
 
-create index if not exists order_items_user_id_idx on public.order_items(user_id);
-create index if not exists order_items_order_id_idx on public.order_items(order_id);
+create index if not exists order_items_user_id_idx on public.order_items(user_id) where user_id is not null;
+create index if not exists order_items_order_id_idx on public.order_items(order_id) where order_id is not null;
 
 drop policy if exists "Users can read own order items" on public.order_items;
 create policy "Users can read own order items"

@@ -1,0 +1,85 @@
+{
+  "capturedAt": "2026-10-18T18:26:51.741Z",
+  "projectHost": "eohyhutadbpghjvbwecv.supabase.co",
+  "source": "Supabase anon contract probe because OpenAPI returned HTTP 401",
+  "tables": {
+    "product_catalog": {
+      "status": 200,
+      "reachableWithAnon": true,
+      "columns": [
+        "product_name",
+        "category",
+        "description",
+        "image_url",
+        "display_price_text",
+        "unit_label",
+        "default_price",
+        "monthly_price",
+        "fifteen_day_price",
+        "weekly_price",
+        "one_time_price",
+        "custom_price",
+        "is_available",
+        "availability_message"
+      ]
+    },
+    "saved_addresses": {
+      "status": 200,
+      "reachableWithAnon": true,
+      "columns": [
+        "local_id",
+        "name",
+        "mobile",
+        "pin",
+        "house",
+        "street",
+        "town",
+        "city",
+        "state",
+        "created_at"
+      ]
+    },
+    "orders": {
+      "status": 200,
+      "reachableWithAnon": true,
+      "columns": [
+        "id",
+        "ordered_at",
+        "payment_mode",
+        "status",
+        "delivery_status",
+        "customer_name",
+        "customer_phone",
+        "customer_email",
+        "address",
+        "delivery_address",
+        "delivery_address_id",
+        "customer_type",
+        "order_category",
+        "cod_fee",
+        "total_amount"
+      ]
+    },
+    "order_items": {
+      "status": 200,
+      "reachableWithAnon": true,
+      "columns": [
+        "order_id",
+        "item_index",
+        "product_name",
+        "price",
+        "image_url",
+        "quantity",
+        "packets",
+        "start_date",
+        "end_date",
+        "slot",
+        "plan",
+        "cancelled",
+        "cancelled_at",
+        "delivery_controls",
+        "delivery_controls_summary"
+      ]
+    }
+  }
+}

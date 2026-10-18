@@ -263,7 +263,11 @@ to authenticated;
 
 
 -- 6) Sales views for admin dashboard
-create or replace view public.admin_today_sales_by_product as
+-- SECURITY INVOKER keeps RLS and caller privileges active. public.is_admin()
+-- prevents non-admin users from reading even their own aggregate through these
+-- admin-only views.
+create or replace view public.admin_today_sales_by_product
+with (security_invoker = true) as
 select
   oi.product_name,
   count(*) as line_count,
@@ -272,13 +276,15 @@ select
 from public.order_items oi
 join public.orders o on o.id = oi.order_id
 where
-  (o.ordered_at at time zone 'Asia/Kolkata')::date = (now() at time zone 'Asia/Kolkata')::date
+  public.is_admin()
+  and (o.ordered_at at time zone 'Asia/Kolkata')::date = (now() at time zone 'Asia/Kolkata')::date
   and coalesce(oi.cancelled, false) = false
   and coalesce(o.status, '') not in ('Cancelled', 'Canceled')
 group by oi.product_name
 order by gross_amount desc;
 
-create or replace view public.admin_today_orders_summary as
+create or replace view public.admin_today_orders_summary
+with (security_invoker = true) as
 select
   count(*) as total_orders,
   coalesce(sum(total_amount), 0) as total_sales,
@@ -286,8 +292,12 @@ select
   count(*) filter (where status = 'Delivered') as delivered_orders,
   count(*) filter (where status in ('Cancelled', 'Canceled')) as cancelled_orders
 from public.orders
-where (ordered_at at time zone 'Asia/Kolkata')::date = (now() at time zone 'Asia/Kolkata')::date;
+where
+  public.is_admin()
+  and (ordered_at at time zone 'Asia/Kolkata')::date = (now() at time zone 'Asia/Kolkata')::date;
 
+revoke all on public.admin_today_sales_by_product from public, anon;
+revoke all on public.admin_today_orders_summary from public, anon;
 grant select on public.admin_today_sales_by_product to authenticated;
 grant select on public.admin_today_orders_summary to authenticated;
 

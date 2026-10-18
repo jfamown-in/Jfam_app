@@ -35,7 +35,8 @@ const USER_SCOPED_STORAGE_KEYS = new Set([
   'viewedProducts',
   'dismissedNotifications',
   'deliveryControlsByProduct',
-  'buyNowItem'
+  'buyNowItem',
+  'pendingCheckoutIdempotency'
 ]);
 
 const rawStorageGetItem = Storage.prototype.getItem;
@@ -163,6 +164,7 @@ const didUndoJune26Pause = undoSavedPauseForJune26();
     let paymentSuccessTimer = null;
     let activeRazorpayAttempt = null;
     let activeMerchantUpiPayment = null;
+    let checkoutRequestInFlight = false;
     let razorpayPaymentPollTimer = null;
     let razorpayPaymentPollInFlight = false;
     let pendingOrderCancel = null;
@@ -930,58 +932,52 @@ async function startRazorpayQrPayment() {
   }
 
   const sb = window.supabaseClient;
-  if (sb?.functions?.invoke) {
-    try {
-      updateRazorpayQrMessage("Preparing payment", "Please wait while we create your secure QR.");
-
-      const { data, error } = await sb.functions.invoke("razorpay-create-qr", {
-        body: {
-          amount,
-          currency: "INR",
-          description: "M.R Milk order payment",
-          customer: {
-            name: localStorage.getItem("userName") || localStorage.getItem("profileName") || "",
-            email: localStorage.getItem("userEmail") || "",
-            mobile: localStorage.getItem("userMobile") || ""
-          }
-        }
-      });
-
-      if (!error && data?.attemptId && data?.imageUrl) {
-        activeMerchantUpiPayment = null;
-        activeRazorpayAttempt = {
-          attemptId: data.attemptId,
-          qrId: data.qrId,
-          imageUrl: data.imageUrl,
-          expiresAt: data.expiresAt,
-          amount: Number(data.amount) || amount
-        };
-
-        setActiveScreen('upiQr');
-        return true;
-      }
-
-      console.log("Razorpay QR create failed", error || data);
-    } catch (error) {
-      console.log("Razorpay QR create failed", error);
-    }
-  }
-
-  const merchantPayment = buildMerchantUpiPayment(amount);
-
-  if (!merchantPayment.isReady) {
-    showToast("Merchant UPI payment is not configured.");
-    renderPaymentMode();
+  if (!sb?.functions?.invoke) {
+    showToast("Secure UPI checkout is unavailable. Please try again later.");
     return false;
   }
 
-  activeRazorpayAttempt = null;
-  activeMerchantUpiPayment = {
-    ...merchantPayment,
-    expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString()
-  };
-  setActiveScreen('upiQr');
-  return true;
+  const checkoutResult = await createServerCheckout('upi');
+  if (!checkoutResult) return false;
+
+  if (Number(checkoutResult.payableAmount) <= 0) {
+    await finishServerCheckout(checkoutResult, 'Order confirmed using MilkCash.');
+    setActiveScreen('profileOrders');
+    return true;
+  }
+
+  try {
+    updateRazorpayQrMessage("Preparing payment", "Please wait while we create your secure QR.");
+
+    const { data, error } = await sb.functions.invoke("razorpay-create-qr", {
+      body: { paymentAttemptId: checkoutResult.paymentAttemptId }
+    });
+
+    if (!error && data?.attemptId && data?.imageUrl) {
+      activeMerchantUpiPayment = null;
+      activeRazorpayAttempt = {
+        attemptId: data.attemptId,
+        orderId: checkoutResult.orderId,
+        qrId: data.qrId,
+        imageUrl: data.imageUrl,
+        expiresAt: data.expiresAt,
+        amount: Number(data.amount) || Number(checkoutResult.payableAmount) || amount
+      };
+
+      setActiveScreen('upiQr');
+      return true;
+    }
+
+    console.log("Razorpay QR create failed", error || data);
+    showToast("Secure UPI QR could not be created. Your order is pending payment.");
+    await mrHydrateOrdersFromDatabase({ forceRemote: true });
+    return false;
+  } catch (error) {
+    console.log("Razorpay QR create failed", error);
+    showToast("Secure UPI QR could not be created. Your order is pending payment.");
+    await mrHydrateOrdersFromDatabase({ forceRemote: true });
+    return false;
+  }
 }
 
 function startRazorpayPaymentPolling() {
@@ -1012,9 +1008,10 @@ async function checkRazorpayPaymentStatus() {
 
     if (data.status === "captured" || data.status === "paid") {
       stopRazorpayPaymentPolling();
-      updateRazorpayQrMessage("Payment received", "We are verifying it securely. Your order will appear after server confirmation.");
+      updateRazorpayQrMessage("Payment verified", "Your order is confirmed securely.");
       activeRazorpayAttempt = null;
-      showToast("Payment received. Waiting for secure server confirmation.");
+      await finishServerCheckout(data, "Payment verified. Order confirmed.");
+      setActiveScreen('profileOrders');
       return;
     }
 
@@ -1451,6 +1448,131 @@ function getPaymentTotal() {
   return Math.max(0, getPaymentBaseTotal() - getMilkCashDiscount()) + codFee;
 }
 
+function getCheckoutSignature(method) {
+  const raw = [
+    getCheckoutMode(),
+    method,
+    localStorage.getItem('selectedDeliveryAddressId') || '',
+    JSON.stringify(getPaymentCheckoutItems().map(item => ({
+      name: item.name,
+      quantity: item.quantity,
+      packets: item.packets,
+      plan: item.plan,
+      start: item.start,
+      end: item.end,
+      slot: item.slot
+    }))),
+    String(isMilkCashSelected())
+  ].join('|');
+
+  let hash = 0;
+  for (let index = 0; index < raw.length; index += 1) {
+    hash = ((hash << 5) - hash + raw.charCodeAt(index)) | 0;
+  }
+
+  return String(Math.abs(hash));
+}
+
+function createCheckoutIdempotencyKey(method) {
+  const signature = getCheckoutSignature(method);
+  try {
+    const stored = JSON.parse(localStorage.getItem('pendingCheckoutIdempotency') || '{}');
+    if (stored.signature === signature && stored.key) return stored.key;
+  } catch (error) {
+    // Ignore corrupt local cache and create a fresh idempotency key.
+  }
+
+  const key = `checkout-${Date.now()}-${signature}`;
+  localStorage.setItem('pendingCheckoutIdempotency', JSON.stringify({ signature, key }));
+  return key;
+}
+
+function clearCheckoutIdempotencyKey() {
+  localStorage.removeItem('pendingCheckoutIdempotency');
+}
+
+function buildCheckoutRpcItems() {
+  return getPaymentCheckoutItems().map(item => ({
+    productName: item.name,
+    quantity: item.quantity || '',
+    packets: Number(item.packets) || 1,
+    plan: item.plan || '',
+    startDate: item.start || '',
+    endDate: item.end || '',
+    slot: item.slot || ''
+  }));
+}
+
+function removeCheckedOutLocalCartItems() {
+  if (getCheckoutMode() === 'buyNow') {
+    localStorage.removeItem('buyNowItem');
+    localStorage.removeItem('checkoutMode');
+    return;
+  }
+
+  const cart = JSON.parse(localStorage.getItem('cart')) || [];
+  const selected = new Set([...selectedCartItems].map(Number));
+  const remaining = cart.filter((_, index) => !selected.has(index));
+  selectedCartItems = new Set();
+  saveSelectedCartItems();
+  mrSaveCart(remaining);
+}
+
+async function createServerCheckout(paymentMethod) {
+  if (checkoutRequestInFlight) return null;
+  const sb = window.supabaseClient;
+  if (!sb?.rpc) {
+    showToast('Secure checkout is unavailable. Please try again later.');
+    return null;
+  }
+
+  const items = buildCheckoutRpcItems();
+  if (!items.length) {
+    showToast('Select at least one item to checkout.');
+    return null;
+  }
+
+  const address = mrGetSelectedCheckoutAddress();
+  if (!address) {
+    showToast('Add a delivery address before checkout.');
+    setActiveScreen('cartAddress');
+    return null;
+  }
+
+  checkoutRequestInFlight = true;
+  try {
+    const { data, error } = await sb.rpc('create_checkout', {
+      p_items: items,
+      p_delivery_address_id: String(address.id || ''),
+      p_payment_method: paymentMethod,
+      p_milkcash_requested: isMilkCashSelected() ? getMilkCashDiscount() : 0,
+      p_idempotency_key: createCheckoutIdempotencyKey(paymentMethod)
+    });
+
+    if (error || !data?.orderId || !data?.paymentAttemptId) {
+      console.log('Secure checkout failed', error || data);
+      showToast('Secure checkout failed. No order was created.');
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.log('Secure checkout failed', error);
+    showToast('Secure checkout failed. Please try again.');
+    return null;
+  } finally {
+    checkoutRequestInFlight = false;
+  }
+}
+
+async function finishServerCheckout(checkoutResult, message = 'Order created securely.') {
+  clearCheckoutIdempotencyKey();
+  removeCheckedOutLocalCartItems();
+  await mrHydrateOrdersFromDatabase({ forceRemote: true });
+  mrRefreshCartViews();
+  showToast(message);
+}
+
 function renderPaymentMode() {
   ensureValidPaymentMethod();
   const codAvailable = isCodAvailableForCheckout();
@@ -1792,7 +1914,11 @@ document.addEventListener('click', (event) => {
       return;
     }
 
-    showToast("Secure checkout is being activated. No order has been created.");
+    createServerCheckout('cod').then(async checkoutResult => {
+      if (!checkoutResult) return;
+      await finishServerCheckout(checkoutResult, 'COD order created securely.');
+      setActiveScreen('profileOrders');
+    });
     return;
   }
 

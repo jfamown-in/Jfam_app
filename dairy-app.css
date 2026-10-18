@@ -1,4 +1,4 @@
-﻿﻿/*
+/*
   M.R Milk app stylesheet.
 
   File guide:
@@ -777,10 +777,18 @@ button:disabled {
 .bottom-nav svg {
   width: 21px;
   height: 21px;
-  stroke: #3c3832;
-  fill: #f9fbfc;
   stroke-width: 1.9;
   stroke-linecap: round;
+}
+
+.icon-btn svg {
+  stroke: #3c3832;
+  fill: #f9fbfc;
+}
+
+.bottom-nav svg {
+  stroke: currentColor;
+  fill: none;
 }
 
 .hero-card {
@@ -1169,8 +1177,8 @@ button:disabled {
   border-top: 1px solid #ece7e2;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  align-items: center;
-  padding: 4px 8px 2px;
+  align-items: stretch;
+  padding: 4px 8px 5px;
   isolation: isolate;
   box-shadow: 0 -8px 18px rgba(58, 48, 29, 0.08);
 }
@@ -1182,19 +1190,33 @@ button:disabled {
 
 .nav-item {
   color: #4c4a4a;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: 32px 16px;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  justify-items: center;
+  gap: 3px;
+  min-width: 0;
+  height: 53px;
+  padding: 2px 0 0;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
+  line-height: 1;
   cursor: pointer;
   transition: color 0.2s ease, transform 0.15s ease;
 }
 
 .nav-item.active {
   color: #4d9ede;
+}
+
+.nav-item > span:last-child {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  text-align: center;
+  line-height: 16px;
+  white-space: nowrap;
 }
 
 .nav-badge {
@@ -1206,12 +1228,21 @@ button:disabled {
   justify-content: center;
 }
 
-.nav-item.active .nav-badge {
+.nav-item > svg {
+  width: 42px;
+  height: 32px;
+  padding: 5px 10px;
+  border-radius: 16px;
+}
+
+.nav-item.active .nav-badge,
+.nav-item.active > svg {
   background: var(--blue);
   box-shadow: 0 6px 14px rgba(134, 202, 238, 0.32);
 }
 
-.nav-item.active .nav-badge svg {
+.nav-item.active .nav-badge svg,
+.nav-item.active > svg {
   color: #171717;
 }
 /* ================= LOGIN SCREEN ================= */

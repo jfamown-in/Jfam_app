@@ -23,6 +23,7 @@
   --line: #ece7e2;
   --shadow: 0 6px 18px rgba(58, 48, 29, 0.08);
   --shadow-soft: 0 10px 24px rgba(58, 48, 29, 0.12);
+  --tap-scale: 0.985;
 }
 
 * { box-sizing: border-box; }
@@ -38,6 +39,8 @@ button {
   font: inherit;
   border: 0;
   background: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(42, 120, 198, 0.12);
 }
 
 /* Clear keyboard focus without changing the existing visual language. */
@@ -7163,4 +7166,158 @@ button:disabled {
   #products-screen .product-body p,
   #products-screen .product-body strong,
   #products-screen .buy-btn { font-size: 12px; }
+}
+
+/* Mobile smoothness gate: keep touch screens stable, light, and clear. */
+@media (hover: none) and (pointer: coarse), (max-width: 760px) {
+  :root {
+    --shadow: 0 2px 8px rgba(58, 48, 29, 0.06);
+    --shadow-soft: 0 4px 12px rgba(58, 48, 29, 0.08);
+  }
+
+  .app-splash,
+  .splash-logo-wrap,
+  .app-splash-shell::before,
+  .app-splash-shell::after {
+    animation-duration: 0.55s;
+  }
+
+  .home-topbar,
+  .mobile-app.appbar-scrolling .home-topbar {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(-50%);
+    transition: none;
+  }
+
+  .product-card,
+  .featured-card,
+  .mini-plan-card,
+  .custom-plan-banner,
+  .plan-card,
+  .custom-card,
+  .payment-card,
+  .recharge-card,
+  .cart-address-card,
+  .profile-address-card,
+  .payment-main-panel,
+  .payment-summary-box,
+  .milkcash-row,
+  .address-map-card,
+  .modal-box,
+  .plan-modal-card {
+    box-shadow: var(--shadow);
+  }
+
+  .product-card,
+  .featured-card,
+  .product-card img,
+  .featured-card img,
+  .plan-card,
+  .custom-card,
+  .mini-plan-card,
+  .custom-plan-banner,
+  .category-chip,
+  .payment-card,
+  .recharge-card,
+  .place-order-btn,
+  .big-btn,
+  .buy-btn,
+  .primary-cta,
+  .payment-primary-btn,
+  .address-map-btn,
+  .nav-item,
+  .wishlist-heart {
+    transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease, opacity 0.12s ease;
+  }
+
+  .product-card:hover,
+  .featured-card:hover,
+  .mini-plan-card:hover,
+  .custom-plan-banner:hover,
+  .category-chip:hover,
+  .plan-card:hover,
+  .custom-card:hover,
+  .payment-card:hover,
+  .recharge-card:hover,
+  .place-order-btn:not(:disabled):hover,
+  .home-section.featured-section .featured-card:hover .featured-visual img,
+  .featured-card:hover img,
+  .product-card:hover img,
+  .product-card:hover .product-visual img,
+  .featured-card:hover .featured-visual img {
+    transform: none;
+    filter: none;
+    box-shadow: var(--shadow);
+  }
+
+  .circle-action:hover,
+  .day-pill:hover,
+  .primary-cta:hover,
+  .buy-btn:hover,
+  .category-pill:hover,
+  .nav-item:hover {
+    filter: none;
+  }
+
+  .circle-action:active,
+  .day-pill:active,
+  .primary-cta:active,
+  .buy-btn:active,
+  .nav-item:active,
+  .category-pill:active,
+  .payment-primary-btn:active,
+  .place-order-btn:not(:disabled):active,
+  .big-btn:not(:disabled):active,
+  .cart-address-head button:active,
+  .address-map-actions button:active {
+    transform: scale(var(--tap-scale));
+  }
+
+  .logout-modal,
+  .payment-cancel-modal,
+  .order-cancel-modal,
+  .plan-modal {
+    backdrop-filter: none;
+    background: rgba(15, 23, 42, 0.35);
+  }
+
+  .glow-effect,
+  .date-glow,
+  .date-field input[type="date"].date-glow,
+  .payment-card.glow,
+  .address-map-btn.glow {
+    animation: none;
+    box-shadow: 0 0 0 3px rgba(127, 205, 244, 0.26);
+  }
+
+  .hover-full-card {
+    display: none;
+    pointer-events: none;
+  }
+
+  .category-strip,
+  .subscription-filter-row {
+    flex-wrap: wrap;
+    overflow-x: visible;
+    padding-right: 16px;
+  }
+
+  .category-strip {
+    gap: 8px;
+  }
+
+  .subscription-filter {
+    flex: 1 1 auto;
+  }
+
+  #toast {
+    transition: opacity 0.16s ease, transform 0.16s ease;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .hover-full-card {
+    pointer-events: none;
+  }
 }

@@ -520,7 +520,7 @@ function setupAppSplash() {
     if (event.animationName === 'splashOverlayExit') hideSplash();
   });
 
-  window.setTimeout(hideSplash, 1150);
+  window.setTimeout(hideSplash, 700);
 }
 
 function setupAppHeaderAutoReveal() {
@@ -8676,11 +8676,11 @@ updateCartBadge(); // 🔥 ADD THIS
   }, 1500);
 });
 cartBtnClick.addEventListener('click', () => {
-  cartBtnClick.style.transform = "scale(0.35)";
+  cartBtnClick.style.transform = "scale(0.98)";
 
   setTimeout(() => {
     cartBtnClick.style.transform = "scale(1)";
-  }, 150);
+  }, 100);
 });
 const customPlanBanner = document.querySelector('.custom-plan-banner');
 

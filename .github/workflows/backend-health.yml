@@ -31,7 +31,5 @@ jobs:
           JFAM_SUPABASE_URL: ${{ vars.JFAM_SUPABASE_URL }}
           JFAM_SUPABASE_ANON_KEY: ${{ secrets.JFAM_SUPABASE_ANON_KEY }}
           JFAM_REQUIRED_RPCS: backend_healthcheck
-          # Comma-separate deployed Edge Function names here after Razorpay functions exist.
-          # Use '-' to keep the first keepalive pass focused on Auth, REST, and RPC.
-          JFAM_EDGE_FUNCTIONS: '-'
+          JFAM_EDGE_FUNCTIONS: razorpay-create-qr,razorpay-payment-status,razorpay-webhook
         run: node scripts/backend-healthcheck.mjs

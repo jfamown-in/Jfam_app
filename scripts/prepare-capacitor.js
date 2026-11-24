@@ -6,6 +6,8 @@ const outDir = path.join(root, "www");
 
 const entriesToCopy = [
   "index.html",
+  "delete-account.html",
+  "privacy-policy.html",
   "dairy-app.css",
   "script.js",
   "product-images.js",
@@ -19,6 +21,16 @@ function removeDir(target) {
   fs.rmSync(target, { recursive: true, force: true });
 }
 
+function shouldCopyPath(sourcePath) {
+  const base = path.basename(sourcePath);
+  if (base === ".DS_Store") return false;
+  const rel = path.relative(root, sourcePath).replace(/\\/g, "/");
+  if (rel === "images/backgrounds" || rel.startsWith("images/backgrounds/")) {
+    return false;
+  }
+  return true;
+}
+
 function copyEntry(entry) {
   const source = path.join(root, entry);
   const target = path.join(outDir, entry);
@@ -27,7 +39,7 @@ function copyEntry(entry) {
     throw new Error(`Missing required app file: ${entry}`);
   }
 
-  fs.cpSync(source, target, { recursive: true });
+  fs.cpSync(source, target, { recursive: true, filter: shouldCopyPath });
 }
 
 removeDir(outDir);

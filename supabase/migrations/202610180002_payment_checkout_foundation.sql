@@ -170,12 +170,28 @@ create table if not exists public.order_items (
 
 alter table public.order_items enable row level security;
 alter table if exists public.order_items
+  add column if not exists order_id text,
+  add column if not exists user_id uuid references auth.users(id) on delete cascade,
+  add column if not exists item_index integer,
+  add column if not exists product_name text,
+  add column if not exists price numeric(12,2) not null default 0,
+  add column if not exists image_url text,
+  add column if not exists quantity text,
+  add column if not exists packets integer not null default 1,
+  add column if not exists start_date text,
+  add column if not exists end_date text,
+  add column if not exists slot text,
+  add column if not exists plan text,
+  add column if not exists cancelled boolean not null default false,
+  add column if not exists cancelled_at timestamptz,
+  add column if not exists delivery_controls jsonb not null default '[]'::jsonb,
+  add column if not exists delivery_controls_summary text,
   add column if not exists unit_price_snapshot numeric(12,2) not null default 0,
   add column if not exists line_total_snapshot numeric(12,2) not null default 0,
   add column if not exists product_snapshot jsonb not null default '{}'::jsonb;
 
-create index if not exists order_items_user_id_idx on public.order_items(user_id);
-create index if not exists order_items_order_id_idx on public.order_items(order_id);
+create index if not exists order_items_user_id_idx on public.order_items(user_id) where user_id is not null;
+create index if not exists order_items_order_id_idx on public.order_items(order_id) where order_id is not null;
 
 drop policy if exists "Users can read own order items" on public.order_items;
 create policy "Users can read own order items"
@@ -266,6 +282,19 @@ create table if not exists public.payment_attempts (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table if exists public.payment_attempts
+  add column if not exists checkout_attempt_id uuid references public.checkout_attempts(id) on delete set null,
+  add column if not exists order_id text references public.orders(id) on delete cascade,
+  add column if not exists provider text not null default 'razorpay',
+  add column if not exists payment_method text,
+  add column if not exists provider_order_id text,
+  add column if not exists provider_qr_id text,
+  add column if not exists provider_payment_id text,
+  add column if not exists qr_image_url text,
+  add column if not exists qr_short_url text,
+  add column if not exists provider_payload jsonb not null default '{}'::jsonb,
+  add column if not exists verified_at timestamptz;
 
 alter table public.payment_attempts enable row level security;
 create index if not exists payment_attempts_user_created_idx on public.payment_attempts(user_id, created_at desc);
@@ -385,6 +414,7 @@ declare
   v_unit_price numeric(12,2);
   v_packets integer;
   v_line_total numeric(12,2);
+  v_quantity_multiplier numeric(12,4);
   v_order_total numeric(12,2) := 0;
   v_cod_fee numeric(12,2) := 0;
   v_wallet_requested numeric(12,2) := greatest(0, coalesce(p_milkcash_requested, 0));
@@ -484,7 +514,14 @@ begin
     end if;
 
     v_packets := greatest(1, coalesce(nullif(v_item->>'packets', '')::integer, 1));
-    v_unit_price := public.jfam_plan_price(
+    v_quantity_multiplier := case
+      when lower(trim(coalesce(v_item->>'quantity', ''))) in ('0.1', '.1', '100g', '100 g') then 0.1
+      when lower(trim(coalesce(v_item->>'quantity', ''))) in ('0.25', '.25', '250ml', '250 ml', '250g', '250 g') then 0.25
+      when lower(trim(coalesce(v_item->>'quantity', ''))) in ('0.5', '.5', '500ml', '500 ml', '500g', '500 g') then 0.5
+      when lower(trim(coalesce(v_item->>'quantity', ''))) in ('1', '1l', '1 l', '1 litre', '1kg', '1 kg') then 1
+      else 1
+    end;
+    v_unit_price := round(public.jfam_plan_price(
       v_product.monthly_price,
       v_product.fifteen_day_price,
       v_product.weekly_price,
@@ -492,7 +529,7 @@ begin
       v_product.custom_price,
       v_product.default_price,
       v_item->>'plan'
-    );
+    ) * v_quantity_multiplier, 2);
     v_line_total := round(v_unit_price * v_packets, 2);
     v_order_total := v_order_total + v_line_total;
 
@@ -546,7 +583,14 @@ begin
     limit 1;
 
     v_packets := greatest(1, coalesce(nullif(v_item->>'packets', '')::integer, 1));
-    v_unit_price := public.jfam_plan_price(
+    v_quantity_multiplier := case
+      when lower(trim(coalesce(v_item->>'quantity', ''))) in ('0.1', '.1', '100g', '100 g') then 0.1
+      when lower(trim(coalesce(v_item->>'quantity', ''))) in ('0.25', '.25', '250ml', '250 ml', '250g', '250 g') then 0.25
+      when lower(trim(coalesce(v_item->>'quantity', ''))) in ('0.5', '.5', '500ml', '500 ml', '500g', '500 g') then 0.5
+      when lower(trim(coalesce(v_item->>'quantity', ''))) in ('1', '1l', '1 l', '1 litre', '1kg', '1 kg') then 1
+      else 1
+    end;
+    v_unit_price := round(public.jfam_plan_price(
       v_product.monthly_price,
       v_product.fifteen_day_price,
       v_product.weekly_price,
@@ -554,7 +598,7 @@ begin
       v_product.custom_price,
       v_product.default_price,
       v_item->>'plan'
-    );
+    ) * v_quantity_multiplier, 2);
     v_line_total := round(v_unit_price * v_packets, 2);
 
     insert into public.order_items (
@@ -564,7 +608,7 @@ begin
     ) values (
       v_order_id, v_user_id, v_index, v_product.product_name, v_line_total,
       v_product.image_url, coalesce(v_item->>'quantity', v_product.unit_label),
-      v_packets, v_item->>'startDate', v_item->>'endDate', v_item->>'slot', v_item->>'plan',
+      v_packets, nullif(v_item->>'startDate', '')::date, nullif(v_item->>'endDate', '')::date, v_item->>'slot', v_item->>'plan',
       v_unit_price, v_line_total,
       jsonb_build_object(
         'product_name', v_product.product_name,

@@ -804,7 +804,7 @@ document.addEventListener('click', (event) => {
 
 function loadUpiQrScreen() {
   const totalEl = document.getElementById('upiQrTotal');
-  if (totalEl) totalEl.textContent = formatPaymentCurrency(getPaymentTotal());
+  if (totalEl) totalEl.textContent = formatPaymentCurrency(activeRazorpayAttempt?.amount || activeMerchantUpiPayment?.amount || getPaymentTotal());
   if (activeRazorpayAttempt) {
     renderRazorpayQrState();
   } else {
@@ -863,8 +863,28 @@ function getActiveQrSecondsLeft() {
 
 function renderRazorpayQrState() {
   const qrImage = document.getElementById('upiQrImage');
+  const amountEl = document.getElementById('upiQrPayableAmount');
+  const merchantEl = document.getElementById('upiQrMerchant');
+  const upiIdEl = document.getElementById('upiQrUpiId');
+  const payLinkEl = document.getElementById('upiQrPayLink');
+  const confirmBtn = document.getElementById('upiQrManualConfirm');
+
+  if (amountEl) amountEl.textContent = formatPaymentCurrency(activeRazorpayAttempt?.amount || getPaymentTotal());
+  if (merchantEl) merchantEl.textContent = 'Razorpay';
+  if (upiIdEl) upiIdEl.textContent = 'Secure UPI QR';
+  if (payLinkEl) {
+    payLinkEl.hidden = true;
+    payLinkEl.style.display = 'none';
+  }
+  if (confirmBtn) {
+    confirmBtn.hidden = true;
+    confirmBtn.style.display = 'none';
+  }
+
   if (qrImage && activeRazorpayAttempt?.imageUrl) {
     qrImage.src = activeRazorpayAttempt.imageUrl;
+    qrImage.alt = `Razorpay UPI QR for ${formatPaymentCurrency(activeRazorpayAttempt.amount)}`;
+    qrImage.hidden = false;
   }
 
   updateRazorpayQrMessage(
@@ -884,7 +904,7 @@ function renderMerchantUpiQrState(payment = activeMerchantUpiPayment) {
   const confirmBtn = document.getElementById('upiQrManualConfirm');
 
   if (amountEl) amountEl.textContent = formatPaymentCurrency(payment?.amount || getPaymentTotal());
-  if (merchantEl) merchantEl.textContent = payment?.merchant?.payeeName || "Mr.Milk";
+  if (merchantEl) merchantEl.textContent = payment?.merchant?.payeeName || "JFAM";
   if (upiIdEl) upiIdEl.textContent = payment?.merchant?.upiId || "UPI ID not configured";
 
   if (payment?.isReady) {
@@ -896,8 +916,12 @@ function renderMerchantUpiQrState(payment = activeMerchantUpiPayment) {
     if (payLinkEl) {
       payLinkEl.href = payment.uri;
       payLinkEl.hidden = false;
+      payLinkEl.style.display = '';
     }
-    if (confirmBtn) confirmBtn.hidden = false;
+    if (confirmBtn) {
+      confirmBtn.hidden = false;
+      confirmBtn.style.display = '';
+    }
     updateRazorpayQrMessage("Waiting for UPI payment", "Scan the QR or open a UPI app, then tap confirm after payment is complete.");
     return;
   }
@@ -1071,9 +1095,9 @@ function escapePaymentHtml(value) {
 
 const JFAM_DEFAULT_UPI_MERCHANT = Object.freeze({
   upiId: "",
-  payeeName: "Mr.Milk",
+  payeeName: "JFAM",
   merchantCode: "",
-  transactionNote: "Mr.Milk order payment"
+  transactionNote: "JFAM order payment"
 });
 
 function getConfiguredUpiMerchant() {
@@ -1420,14 +1444,12 @@ function isOneTimePaymentItem(item) {
 }
 
 function isCodAvailableForCheckout(items = getPaymentCheckoutItems()) {
-  return items.length > 0 && items.every(isOneTimePaymentItem);
+  return items.length > 0;
 }
 
 function ensureValidPaymentMethod() {
-  if (selectedPaymentMethod === "cod" && !isCodAvailableForCheckout()) {
-    selectedPaymentMethod = "upi";
-    upiScanSelected = false;
-  }
+  selectedPaymentMethod = "cod";
+  upiScanSelected = false;
 }
 
 function getPaymentBaseTotal() {
@@ -1450,6 +1472,7 @@ function getPaymentTotal() {
 
 function getCheckoutSignature(method) {
   const raw = [
+    'checkout-v3-authoritative-quantity',
     getCheckoutMode(),
     method,
     localStorage.getItem('selectedDeliveryAddressId') || '',
@@ -1526,6 +1549,19 @@ async function createServerCheckout(paymentMethod) {
     return null;
   }
 
+  if (!sb?.auth?.getUser) {
+    showToast('Please sign in again before checkout.');
+    setActiveScreen('login');
+    return null;
+  }
+
+  const { data: authData, error: authError } = await sb.auth.getUser();
+  if (authError || !authData?.user) {
+    showToast('Please sign in again before checkout.');
+    setActiveScreen('login');
+    return null;
+  }
+
   const items = buildCheckoutRpcItems();
   if (!items.length) {
     showToast('Select at least one item to checkout.');
@@ -1537,6 +1573,20 @@ async function createServerCheckout(paymentMethod) {
     showToast('Add a delivery address before checkout.');
     setActiveScreen('cartAddress');
     return null;
+  }
+
+  if (!Number.isFinite(Number(address.latitude)) || !Number.isFinite(Number(address.longitude))) {
+    showToast('Confirm the exact delivery location on the map before placing your order.');
+    setActiveScreen('cartAddress');
+    return null;
+  }
+
+  if (localStorage.getItem("isLoggedIn") === "true") {
+    const addressSynced = await mrSyncSavedAddressesToDatabase(getSavedAddresses());
+    if (!addressSynced) {
+      showToast("Delivery location could not be saved. Please retry before placing your order.");
+      return null;
+    }
   }
 
   checkoutRequestInFlight = true;
@@ -1551,7 +1601,14 @@ async function createServerCheckout(paymentMethod) {
 
     if (error || !data?.orderId || !data?.paymentAttemptId) {
       console.log('Secure checkout failed', error || data);
-      showToast('Secure checkout failed. No order was created.');
+      if (/auth|jwt|token|session/i.test(String(error?.message || ''))) {
+        showToast('Please sign in again before checkout.');
+        setActiveScreen('login');
+      } else if (window.location.hostname === 'localhost' && error?.message) {
+        showToast(`Secure checkout failed: ${String(error.message).slice(0, 120)}`);
+      } else {
+        showToast('Secure checkout failed. No order was created.');
+      }
       return null;
     }
 
@@ -1579,6 +1636,12 @@ function renderPaymentMode() {
 
   document.querySelectorAll('.payment-method-tab').forEach(tab => {
     const isCodTab = tab.dataset.paymentMethod === "cod";
+
+    if (!isCodTab) {
+      tab.hidden = true;
+      return;
+    }
+    tab.hidden = false;
 
     if (isCodTab) {
       const note = tab.querySelector('.payment-method-note');
@@ -1620,7 +1683,7 @@ function renderPaymentSummary() {
         <strong>${formatPaymentCurrency(baseTotal)}</strong>
       </div>
       <div class="payment-summary-line">
-        <span>Mr.MilkCash Discount</span>
+        <span>JFAM Cash Discount</span>
         <strong>-${formatPaymentCurrency(milkCashDiscount)}</strong>
       </div>
       ${codFee ? `
@@ -1633,7 +1696,7 @@ function renderPaymentSummary() {
         <span>Total Amount</span>
         <strong>${formatPaymentCurrency(total)}</strong>
       </div>
-      <p>By placing the order, you agree to Mr.Milk's Terms of Use and Privacy Policy</p>
+      <p>By placing the order, you agree to JFAM's Terms of Use and Privacy Policy</p>
     </div>
   `;
 }
@@ -1652,45 +1715,13 @@ function renderPaymentMethodContent() {
         <input type="radio" name="codOption" checked>
         <span>Cash on Delivery (Cash/UPI)</span>
       </label>
-      <p class="payment-help">For this option, there is a fee of ${formatPaymentCurrency(10)}. You can Pay online to avoid this.</p>
-      <button type="button" class="payment-primary-btn" data-cod-pay>Pay ${formatPaymentCurrency(total)}</button>
+      <p class="payment-help">Pay by cash or UPI to the delivery partner when your order arrives. A ${formatPaymentCurrency(10)} COD fee applies.</p>
+      <button type="button" class="payment-primary-btn" data-cod-pay>Place order • ${formatPaymentCurrency(total)}</button>
     `;
     return;
   }
 
-  if (selectedPaymentMethod === "upi") {
-    const merchantPayment = buildMerchantUpiPayment(total);
-    const payableLabel = formatPaymentCurrency(total);
-    const merchantName = escapePaymentHtml(merchantPayment.merchant.payeeName);
-    const merchantUpiId = escapePaymentHtml(merchantPayment.merchant.upiId);
-
-    content.innerHTML = `
-      <h3>Pay using UPI</h3>
-      <label class="payment-radio-row scan-pay-row">
-        <input type="radio" name="upiOption" id="scanPayRadio" ${upiScanSelected ? "checked" : ""}>
-        <span class="mini-qr-icon" aria-hidden="true"></span>
-        <span>Scan & Pay <strong>${payableLabel}</strong></span>
-      </label>
-      <div class="scan-pay-box ${upiScanSelected ? "active" : ""}">
-        <div class="upi-payable-line">
-          <span>Payable now</span>
-          <strong>${payableLabel}</strong>
-        </div>
-        ${merchantPayment.isReady ? `
-          <p class="payment-help">UPI QR will be generated for ${merchantName} (${merchantUpiId}).</p>
-        ` : `
-          <p class="payment-help payment-error">Merchant UPI payment is not configured. Please choose COD if it is available for these items.</p>
-        `}
-        <button type="button" class="payment-primary-btn" data-upi-pay ${merchantPayment.isReady ? "" : "disabled"}>Pay ${payableLabel}</button>
-      </div>
-    `;
-    return;
-  }
-
-  content.innerHTML = `
-    <h3>Credit/Debit Card</h3>
-    <p class="payment-help coming-soon-inline">This feature is coming soon</p>
-  `;
+  content.innerHTML = '<p class="payment-help">Select items to place a cash on delivery order.</p>';
 }
 
 function detectCardBrand(digits) {
@@ -1858,6 +1889,11 @@ document.addEventListener('click', (event) => {
   if (methodTab) {
     const paymentMethod = methodTab.dataset.paymentMethod;
 
+    if (paymentMethod !== "cod") {
+      event.preventDefault();
+      return;
+    }
+
     if (paymentMethod === "cod" && !isCodAvailableForCheckout()) {
       event.preventDefault();
       showToast(COD_ONE_TIME_ONLY_NOTE);
@@ -1908,9 +1944,6 @@ document.addEventListener('click', (event) => {
   if (event.target.closest('[data-cod-pay]')) {
     if (!isCodAvailableForCheckout()) {
       showToast(COD_ONE_TIME_ONLY_NOTE);
-      selectedPaymentMethod = "upi";
-      upiScanSelected = false;
-      renderPaymentMode();
       return;
     }
 
@@ -1997,7 +2030,21 @@ document.addEventListener('input', (event) => {
 
   if (addressFieldPrefix) {
     clearAddressMapVerification(addressFieldPrefix);
+    sessionStorage.removeItem(`jfamAddressCoordinates:${addressFieldPrefix}`);
     updateAddressMapNote(addressFieldPrefix);
+    const addressId = addressFieldPrefix === 'cartAddress'
+      ? window.editingCartAddressId
+      : addressFieldPrefix === 'profileAddress'
+        ? window.editingProfileAddressId
+        : addressFieldPrefix === 'address'
+          ? window.editingAddressId
+          : null;
+    const address = getSavedAddresses().find(item => Number(item.id) === Number(addressId));
+    if (address && addressId) {
+      setSavedAddresses(getSavedAddresses().map(item => Number(item.id) === Number(address.id)
+        ? { ...item, latitude: null, longitude: null }
+        : item));
+    }
   }
 
   if (event.target.closest('#delivery-controls-screen')) {
@@ -2226,6 +2273,16 @@ document.addEventListener('click', (event) => {
     return;
   }
 
+  if (
+    profileOption &&
+    (profileOption.dataset.profileAction === 'deleteAccount' ||
+      profileOption.textContent.includes('Delete Account'))
+  ) {
+    event.preventDefault();
+    setActiveScreen('deleteAccount');
+    return;
+  }
+
   if (event.target.closest('#cancelAddressBtn')) {
     event.preventDefault();
     closeCheckoutAddressForm();
@@ -2271,6 +2328,13 @@ document.addEventListener('click', (event) => {
   if (savedAddressMapBtn) {
     event.preventDefault();
     window.open(savedAddressMapBtn.dataset.openAddressMap, '_blank', 'noopener');
+    return;
+  }
+
+  const cartMapBtn = event.target.closest('[data-cart-address-map]');
+  if (cartMapBtn) {
+    event.preventDefault();
+    openAddressMap('cartAddress');
     return;
   }
 
@@ -4772,8 +4836,24 @@ function setActiveScreen(screenName, options = {}) {
       if (screenName === 'profileOrders') renderProfileOrders();
       if (screenName === 'profileSubscriptions') renderProfileSubscriptions();
       if (screenName === 'profileAddresses') renderProfileAddresses();
-      if (screenName === 'profileCards') renderProfileCards();
-      if (screenName === 'profileUpi') renderProfileUpis();
+      if (screenName === 'profileCards' || screenName === 'profileUpi') {
+        setActiveScreen('profile', { replace: true });
+        return;
+      }
+      if (screenName === 'deleteAccount') {
+        const input = document.getElementById('deleteAccountConfirmInput');
+        const status = document.getElementById('deleteAccountStatus');
+        const btn = document.getElementById('confirmDeleteAccountBtn');
+        if (input) input.value = '';
+        if (status) {
+          status.textContent = '';
+          status.classList.remove('is-error', 'is-success');
+        }
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = 'Permanently Delete Account';
+        }
+      }
       if (screenName === 'notifications') renderNotifications();
       if (screenName === 'paymentMode') loadPaymentMode();
       if (screenName === 'upiQr') loadUpiQrScreen();
@@ -5779,7 +5859,9 @@ function mrNormalizeSavedAddresses(addresses = []) {
       street: String(address.street || "").trim(),
       town: String(address.town || "").trim(),
       city: String(address.city || "Pilani").trim(),
-      state: String(address.state || "Rajasthan").trim()
+      state: String(address.state || "Rajasthan").trim(),
+      latitude: address.latitude === null || address.latitude === undefined || address.latitude === "" ? null : Number(address.latitude),
+      longitude: address.longitude === null || address.longitude === undefined || address.longitude === "" ? null : Number(address.longitude)
     };
     const key = mrSavedAddressKey(cleanAddress);
     if (!key) return;
@@ -5799,7 +5881,9 @@ function mrSavedAddressRowToItem(row) {
     street: row.street || "",
     town: row.town || "",
     city: row.city || "Pilani",
-    state: row.state || "Rajasthan"
+    state: row.state || "Rajasthan",
+    latitude: row.latitude === null || row.latitude === undefined ? null : Number(row.latitude),
+    longitude: row.longitude === null || row.longitude === undefined ? null : Number(row.longitude)
   };
 }
 
@@ -5822,6 +5906,8 @@ async function mrSyncSavedAddressesToDatabase(addresses = mrReadSavedAddresses()
     town: address.town,
     city: address.city,
     state: address.state,
+      latitude: address.latitude,
+      longitude: address.longitude,
     updated_at: new Date().toISOString()
   }));
 
@@ -5864,7 +5950,7 @@ async function mrHydrateSavedAddressesFromDatabase({ preferLocal = false, forceR
 
   const { data, error } = await sb
     .from("saved_addresses")
-    .select("local_id,name,mobile,pin,house,street,town,city,state,created_at")
+    .select("local_id,name,mobile,pin,house,street,town,city,state,latitude,longitude,created_at")
     .eq("user_id", userId)
     .order("created_at", { ascending: true });
 
@@ -6117,11 +6203,22 @@ async function mrSendEmailOtp(email, createUser = false) {
   return true;
 }
 
+function mrIsNativeAppWebView() {
+  if (typeof window === "undefined") return false;
+  if (window.Capacitor?.isNativePlatform?.()) return true;
+  return /;\s*wv\)/i.test(navigator.userAgent || "");
+}
+
 function mrGetGoogleRedirectUrl() {
   return `${window.location.origin}${window.location.pathname}`;
 }
 
 async function mrStartGoogleAuth() {
+  if (mrIsNativeAppWebView()) {
+    showToast("Please use Email OTP to sign in or create an account in the app.");
+    return;
+  }
+
   const sb = mrGetSupabase();
   if (!sb) return;
 
@@ -6373,6 +6470,12 @@ document.querySelectorAll("[data-login-policy-link]").forEach(button => {
 });
 
 document.querySelectorAll("[data-google-auth]").forEach(button => {
+  if (mrIsNativeAppWebView()) {
+    button.hidden = true;
+    button.style.display = "none";
+    button.setAttribute("aria-hidden", "true");
+    return;
+  }
   button.addEventListener("click", event => {
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -7117,6 +7220,103 @@ yesBtn.addEventListener('click', async () => {
 cancelBtn.addEventListener('click', () => {
   logoutModal.classList.remove('active');
 });
+
+async function handleInAppAccountDeletion() {
+  const input = document.getElementById('deleteAccountConfirmInput');
+  const statusEl = document.getElementById('deleteAccountStatus');
+  const confirmBtn = document.getElementById('confirmDeleteAccountBtn');
+  const typed = (input?.value || '').trim().toUpperCase();
+
+  if (typed !== 'DELETE') {
+    if (statusEl) {
+      statusEl.textContent = 'Please type DELETE in the box above to confirm account deletion.';
+      statusEl.classList.add('is-error');
+      statusEl.classList.remove('is-success');
+    }
+    input?.focus();
+    return;
+  }
+
+  if (confirmBtn) {
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Deleting account...';
+  }
+  if (statusEl) {
+    statusEl.textContent = 'Deleting your account and clearing personal data...';
+    statusEl.classList.remove('is-error', 'is-success');
+  }
+
+  const sb = window.supabaseClient;
+  let serverFullyDeleted = false;
+  let userId = null;
+
+  try {
+    if (sb?.auth) {
+      const { data: userData } = await sb.auth.getUser();
+      userId = userData?.user?.id || null;
+    }
+
+    if (sb && userId) {
+      const { error: rpcError } = await sb.rpc('delete_my_account');
+      if (!rpcError) {
+        serverFullyDeleted = true;
+      } else {
+        // Fallback cleanup under RLS if delete_my_account RPC has not been migrated yet
+        console.log('delete_my_account rpc fallback:', rpcError.message);
+        await sb.from('saved_addresses').delete().eq('user_id', userId).catch(() => {});
+        await sb.from('profiles').delete().eq('id', userId).catch(() => {});
+      }
+    }
+  } catch (err) {
+    console.log('Account deletion error:', err);
+  }
+
+  try {
+    mrStopRealtimeSync();
+    await sb?.auth?.signOut();
+  } catch (err) {
+    console.log('Sign out during deletion:', err);
+  }
+
+  const currentKey = localStorage.getItem('currentUserKey');
+  const keysToClear = [
+    'userName',
+    'userMobile',
+    'userEmail',
+    'currentUserKey',
+    'loginEmail',
+    'pendingLoginProfile',
+    'pendingUserKey',
+    'selectedDeliveryAddressId',
+    'checkoutItems',
+    'jfamPendingCodOrder'
+  ];
+  keysToClear.forEach(k => localStorage.removeItem(k));
+  if (currentKey) {
+    Object.keys(localStorage).forEach(k => {
+      if (k.includes(currentKey)) localStorage.removeItem(k);
+    });
+  }
+  localStorage.setItem('isLoggedIn', 'false');
+  isLoggedIn = false;
+
+  updateNavbar();
+  updateProfile();
+
+  const message = serverFullyDeleted
+    ? 'Your JFAM account has been permanently deleted.'
+    : 'Your profile data was cleared and you have been signed out. Email jfamown@gmail.com if you need confirmation of full auth removal.';
+
+  if (statusEl) {
+    statusEl.textContent = message;
+    statusEl.classList.remove('is-error');
+    statusEl.classList.add('is-success');
+  }
+  showToast(message);
+  setActiveScreen('home', { replace: true });
+}
+
+document.getElementById('confirmDeleteAccountBtn')?.addEventListener('click', handleInAppAccountDeletion);
 
 paymentCancelYesBtn?.addEventListener('click', () => {
   hidePaymentCancelModal();
@@ -9677,10 +9877,12 @@ function renderCartAddressPage() {
           <p>${address.house}, ${address.street}</p>
           <p>${address.town ? `${address.town}, ` : ""}${address.city}, ${address.state} - ${address.pin}</p>
           <p>Mobile: <strong>${address.mobile}</strong></p>
+          ${Number.isFinite(Number(address.latitude)) && Number.isFinite(Number(address.longitude)) ? `<p class="address-coordinate-confirmation">Location confirmed · ${Number(address.latitude).toFixed(5)}, ${Number(address.longitude).toFixed(5)}</p>` : '<p class="address-coordinate-confirmation needs-confirmation">Confirm exact location on the map before ordering</p>'}
 
           <div class="address-actions">
             <button type="button" data-remove-address="${address.id}">REMOVE</button>
             <button type="button" data-edit-address="${address.id}">EDIT</button>
+            <button type="button" data-cart-address-map="${address.id}">Confirm delivery pin</button>
             ${renderAddressMapButton(address)}
           </div>
         </div>
@@ -11206,6 +11408,8 @@ function openInAppAddressPicker(prefix) {
 
   activeAddressMapPrefix = prefix;
   selectedMapAddress = null;
+  if (prefix !== 'cartAddress') sessionStorage.removeItem(`jfamAddressCoordinates:${prefix}`);
+  if (prefix === 'cartAddress') sessionStorage.removeItem('jfamAddressCoordinates:cartAddress');
   if (addressPickerMarker && addressPickerMap) {
     addressPickerMap.removeLayer(addressPickerMarker);
     addressPickerMarker = null;
@@ -11231,8 +11435,16 @@ function openInAppAddressPicker(prefix) {
     }
 
     addressPickerMap.invalidateSize();
-    addressPickerMap.setView(PILANI_MAP_CENTER, 15);
-    pinTypedAddressOnMap(prefix);
+    const confirmedAddress = prefix === 'cartAddress' ? mrGetSelectedCheckoutAddress() : null;
+    const savedLatitude = confirmedAddress?.latitude;
+    const savedLongitude = confirmedAddress?.longitude;
+    if (confirmedAddress && Number.isFinite(Number(savedLatitude)) && Number.isFinite(Number(savedLongitude))) {
+      addressPickerMap.setView([savedLatitude, savedLongitude], 18);
+      selectMapPoint(savedLatitude, savedLongitude, { message: "Saved delivery point. Confirm or move the pin." });
+    } else {
+      addressPickerMap.setView(PILANI_MAP_CENTER, 15);
+      pinTypedAddressOnMap(prefix);
+    }
   }, 80);
 }
 
@@ -11442,6 +11654,29 @@ function useSelectedMapLocation() {
 
   const prefix = activeAddressMapPrefix;
 
+  if (prefix === 'cartAddress') {
+    sessionStorage.setItem('jfamAddressCoordinates:cartAddress', JSON.stringify({
+      latitude: Number(selectedMapAddress.lat),
+      longitude: Number(selectedMapAddress.lon)
+    }));
+    closeInAppAddressPicker();
+    showToast("Delivery location confirmed. Continue to review your order.");
+    return;
+  }
+
+  if (prefix === 'profileAddress') {
+    sessionStorage.setItem('jfamAddressCoordinates:profileAddress', JSON.stringify({
+      latitude: Number(selectedMapAddress.lat),
+      longitude: Number(selectedMapAddress.lon)
+    }));
+    setInputValueIfFound('profileAddressHouse', selectedMapAddress.house, { overwrite: Boolean(selectedMapAddress.house) });
+    setInputValueIfFound('profileAddressStreet', selectedMapAddress.street, { overwrite: true });
+    setInputValueIfFound('profileAddressTown', selectedMapAddress.town, { overwrite: true });
+    closeInAppAddressPicker();
+    showToast("Map location confirmed. Save the address to keep it.");
+    return;
+  }
+
   setInputValueIfFound(`${prefix}House`, selectedMapAddress.house, {
     overwrite: Boolean(selectedMapAddress.house)
   });
@@ -11450,6 +11685,15 @@ function useSelectedMapLocation() {
   setInputValueIfFound(`${prefix}Pincode`, "333031", { overwrite: true });
   setInputValueIfFound(`${prefix}City`, "Pilani", { overwrite: true });
   setInputValueIfFound(`${prefix}State`, "Rajasthan", { overwrite: true });
+  // Coordinates are kept pending until the customer presses Save on the address form.
+
+  const coordinates = {
+    latitude: Number(selectedMapAddress.lat),
+    longitude: Number(selectedMapAddress.lon)
+  };
+  if (Number.isFinite(coordinates.latitude) && Number.isFinite(coordinates.longitude)) {
+    sessionStorage.setItem(`jfamAddressCoordinates:${prefix}`, JSON.stringify(coordinates));
+  }
 
   const verifiedText = buildAddressSearchText(getAddressFormData(prefix));
   setVerifiedAddressText(prefix, verifiedText);
@@ -11460,7 +11704,21 @@ function useSelectedMapLocation() {
 }
 
 function ensureAddressMapVerified(prefix) {
-  return true;
+  const coordinates = getConfirmedAddressCoordinates(prefix);
+  if (coordinates) return true;
+  showToast("Choose and confirm the exact delivery point on the map first.");
+  openAddressMap(prefix);
+  return false;
+}
+
+function getConfirmedAddressCoordinates(prefix) {
+  try {
+    const value = JSON.parse(sessionStorage.getItem(`jfamAddressCoordinates:${prefix}`) || "null");
+    if (Number.isFinite(Number(value?.latitude)) && Number.isFinite(Number(value?.longitude))) return value;
+  } catch (error) {
+    // A malformed confirmation should be treated as unconfirmed.
+  }
+  return null;
 }
 
 function resetAddressFormVerification(prefix) {
@@ -11474,10 +11732,14 @@ function hydrateAddressFormVerification(prefix, address) {
 }
 
 function renderAddressMapButton(address) {
+  const hasCoordinates = Number.isFinite(Number(address?.latitude)) && Number.isFinite(Number(address?.longitude));
+  const query = hasCoordinates
+    ? `${Number(address.latitude)},${Number(address.longitude)}`
+    : buildAddressSearchText(address);
   const url =
-    `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(buildAddressSearchText(address))}`;
+    `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
   return `
-    <button type="button" class="address-map-btn" data-open-address-map="${url}" title="Open this address on map">📍</button>
+    <a class="address-map-btn" href="${url}" target="_blank" rel="noopener noreferrer" aria-label="Open ${hasCoordinates ? 'confirmed delivery point' : 'address'} in Google Maps" title="Open this address on Google Maps">📍 Google Maps</a>
   `;
 }
 
@@ -11494,6 +11756,22 @@ document.getElementById('proceedCheckoutBtn')?.addEventListener('click', () => {
     addressFormWrap.classList.add('active');
     return;
   }
+  const selectedAddress = mrGetSelectedCheckoutAddress();
+  if (!selectedAddress || !Number.isFinite(Number(selectedAddress.latitude)) || !Number.isFinite(Number(selectedAddress.longitude))) {
+    showToast("Confirm your delivery location before continuing.");
+    openAddressMap('cartAddress');
+    return;
+  }
+  const confirmedCoordinates = getConfirmedAddressCoordinates('cartAddress');
+  if (!confirmedCoordinates) {
+    showToast("Review and confirm the delivery pin to continue.");
+    openAddressMap('cartAddress');
+    return;
+  }
+  setSavedAddresses(addresses.map(address => Number(address.id) === Number(selectedAddress.id)
+    ? { ...address, latitude: confirmedCoordinates.latitude, longitude: confirmedCoordinates.longitude }
+    : address));
+  sessionStorage.removeItem('jfamAddressCoordinates:cartAddress');
   setActiveScreen('paymentMode');
 });
 
@@ -11517,6 +11795,7 @@ function clearCheckoutAddressForm() {
 
   window.editingAddressId = null;
   resetAddressFormVerification('address');
+  sessionStorage.removeItem('jfamAddressCoordinates:address');
 }
 
 function closeCheckoutAddressForm() {
@@ -11552,6 +11831,7 @@ function saveCheckoutAddress() {
   }
 
   if (!ensureAddressMapVerified('address')) return;
+  const coordinates = getConfirmedAddressCoordinates('address');
 
   let addresses = getSavedAddresses();
 
@@ -11559,6 +11839,7 @@ function saveCheckoutAddress() {
 
   if(window.editingAddressId){
     const editingId = window.editingAddressId;
+    const previousAddress = addresses.find(item => item.id === editingId);
 
     addresses = addresses.map(item => {
 
@@ -11573,7 +11854,9 @@ function saveCheckoutAddress() {
           street,
           town,
           city,
-          state
+          state,
+          latitude: coordinates?.latitude ?? previousAddress?.latitude ?? null,
+          longitude: coordinates?.longitude ?? previousAddress?.longitude ?? null
         };
       }
 
@@ -11598,7 +11881,9 @@ function saveCheckoutAddress() {
       street,
       town,
       city,
-      state
+      state,
+      latitude: coordinates?.latitude ?? null,
+      longitude: coordinates?.longitude ?? null
     });
 
     localStorage.setItem('selectedDeliveryAddressId', id);
@@ -11669,6 +11954,7 @@ function renderAddresses() {
               Mobile:
               <strong>${address.mobile}</strong>
             </p>
+            ${Number.isFinite(Number(address.latitude)) && Number.isFinite(Number(address.longitude)) ? `<p class="address-coordinate-confirmation">Location confirmed · ${Number(address.latitude).toFixed(5)}, ${Number(address.longitude).toFixed(5)}</p>` : '<p class="address-coordinate-confirmation needs-confirmation">Confirm exact location on the map before ordering</p>'}
 
             <div class="address-actions">
 
@@ -12238,12 +12524,20 @@ function saveProfileAddress() {
     return;
   }
 
+  if (!getConfirmedAddressCoordinates('profileAddress') && window.editingProfileAddressId) {
+    const existingAddress = getSavedAddresses().find(item => item.id === window.editingProfileAddressId);
+    if (existingAddress?.latitude != null && existingAddress?.longitude != null) {
+      sessionStorage.setItem('jfamAddressCoordinates:profileAddress', JSON.stringify({ latitude: existingAddress.latitude, longitude: existingAddress.longitude }));
+    }
+  }
   if (!ensureAddressMapVerified('profileAddress')) return;
+  const coordinates = getConfirmedAddressCoordinates('profileAddress');
 
   let addresses = getSavedAddresses();
 
   if (window.editingProfileAddressId) {
     const editingId = window.editingProfileAddressId;
+    const previousAddress = addresses.find(item => item.id === editingId);
 
     addresses = addresses.map(item => {
       if (item.id !== editingId) return item;
@@ -12257,7 +12551,9 @@ function saveProfileAddress() {
         street,
         town,
         city,
-        state
+        state,
+        latitude: coordinates?.latitude ?? previousAddress?.latitude ?? null,
+        longitude: coordinates?.longitude ?? previousAddress?.longitude ?? null
       };
     });
 
@@ -12276,7 +12572,9 @@ function saveProfileAddress() {
       street,
       town,
       city,
-      state
+      state,
+      latitude: coordinates?.latitude ?? null,
+      longitude: coordinates?.longitude ?? null
     });
 
     localStorage.setItem('selectedDeliveryAddressId', id);
@@ -12284,6 +12582,7 @@ function saveProfileAddress() {
   }
 
   setSavedAddresses(addresses);
+  sessionStorage.removeItem('jfamAddressCoordinates:profileAddress');
   closeProfileAddressForm();
   renderProfileAddresses();
   renderAddresses();
@@ -12416,11 +12715,21 @@ function saveCartAddress() {
     return;
   }
 
+  if (!getConfirmedAddressCoordinates('cartAddress') && window.editingCartAddressId) {
+    const existingAddress = getSavedAddresses().find(item => item.id === window.editingCartAddressId);
+    if (existingAddress?.latitude != null && existingAddress?.longitude != null) {
+      sessionStorage.setItem('jfamAddressCoordinates:cartAddress', JSON.stringify({
+        latitude: existingAddress.latitude,
+        longitude: existingAddress.longitude
+      }));
+    }
+  }
   if (!ensureAddressMapVerified('cartAddress')) return;
 
   let addresses = getSavedAddresses();
 
   if (window.editingCartAddressId) {
+    const previousAddress = addresses.find(item => item.id === window.editingCartAddressId);
     addresses = addresses.map(item => {
       if (item.id !== window.editingCartAddressId) return item;
 
@@ -12433,7 +12742,9 @@ function saveCartAddress() {
         street,
         town,
         city,
-        state
+        state,
+        latitude: getConfirmedAddressCoordinates('cartAddress')?.latitude ?? previousAddress?.latitude ?? null,
+        longitude: getConfirmedAddressCoordinates('cartAddress')?.longitude ?? previousAddress?.longitude ?? null
       };
     });
 
@@ -12453,13 +12764,16 @@ function saveCartAddress() {
       street,
       town,
       city,
-      state
+      state,
+      latitude: getConfirmedAddressCoordinates('cartAddress')?.latitude ?? null,
+      longitude: getConfirmedAddressCoordinates('cartAddress')?.longitude ?? null
     });
 
     localStorage.setItem('selectedDeliveryAddressId', id);
   }
 
   setSavedAddresses(addresses);
+  sessionStorage.removeItem('jfamAddressCoordinates:cartAddress');
 
   document.getElementById('cartAddressFormWrap')?.classList.remove('active');
   clearCartAddressForm();

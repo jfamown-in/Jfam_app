@@ -144,17 +144,6 @@
     <span>My Wallet</span>
   </button>
 
-   <button class="profile-option profile-option-soon" type="button" disabled>
-    <span>💳</span>
-    <span>Saved Cards</span>
-  </button>
-  <p class="coming-soon-note">This feature is coming soon</p>
-
-   <button class="profile-option">
-    <span>🪙</span>
-    <span>Saved UPI</span>
-  </button>
-
   <button class="profile-option">
     <span>📍</span>
     <span>Saved Addresses</span>
@@ -173,6 +162,11 @@
   <button class="profile-option" data-profile-action="privacy">
     <span>🫆</span>
     <span>Privacy Policy</span>
+  </button>
+
+  <button class="profile-option profile-option-danger" type="button" data-profile-action="deleteAccount">
+    <span>🗑️</span>
+    <span>Delete Account</span>
   </button>
 
 </div>
@@ -288,45 +282,42 @@
 
       </p>
 
-      <h3>6. Your Rights</h3>
+      <h3>6. Your Rights &amp; Account Deletion</h3>
       <p>
         Depending on applicable laws, you may have the right to:<br>
         • Access your personal information.<br>
         • Correct inaccurate information.<br>
-        • Request deletion of your data.<br>
+        • Permanently delete your account and personal data in the app via <strong>Profile &rarr; Delete Account</strong> or by emailing <strong>jfamown@gmail.com</strong>.<br>
         • Withdraw consent where applicable.<br>
         • Contact us regarding any privacy concerns.
       </p>
 
       <h3>7. Permissions</h3>
       <p>
-        The JFAM app may request access to:<br>
+        The JFAM app requests only:<br>
 
-        • Location (for delivery services)<br>
-        • Camera (for profile pictures or document uploads)<br>
-        • Storage/Photos (for uploading images)<br>
-        • Notifications (for order updates)
+        • Foreground Location (optional, used only when you tap "Use My Location" on the delivery address map picker to confirm your delivery pin)<br>
 
-      These permissions are requested only when necessary for app functionality.
+      You may also place your delivery pin manually without granting location permission. We do not collect background location.
       </p>
 
       <h3>8. Children's Privacy</h3>
       <p>
-        We may update this Privacy Policy from time to time. 
-        Any changes will be posted within the app and on our website 
-        with an updated effective date.
+        JFAM is intended for household grocery ordering and is not directed to children under 13.
+        We do not knowingly collect personal information from children. If you believe a child has
+        provided personal information, please contact us and we will promptly delete it.
       </p>
 
-       <h3>9. Changes to This Privacy Policy</h3>
+      <h3>9. Changes to This Privacy Policy</h3>
       <p>
-        We may update this Privacy Policy from time to time. 
-        Any changes will be posted within the app and on our website 
+        We may update this Privacy Policy from time to time.
+        Any changes will be posted within the app and on our website
         with an updated effective date.
       </p>
 
       <h3>10. Contact Us</h3>
       <p>
-        If you have any questions regarding this Privacy Policy, 
+        If you have any questions regarding this Privacy Policy,
         please contact us at: <h5>+91 72309 20774 / jfamown@gmail.com </h5>
 
       </p>
@@ -335,6 +326,50 @@
         For serious legal or payment matters, verified business records and
         applicable law will guide the final decision.
       </p>
+    </section>
+  </div>
+</main>
+
+<!-- DELETE ACCOUNT: in-app account deletion screen required by Google Play policy -->
+<main class="screen" id="delete-account-screen" data-screen="deleteAccount">
+  <div class="terms-shell delete-account-shell">
+    <div class="topbar">
+      <button class="icon-btn" type="button" data-screen-back data-go-screen="profile">&lt;</button>
+      <h1>Delete Account</h1>
+      <div class="topbar-spacer"></div>
+    </div>
+
+    <section class="delete-account-card">
+      <p class="delete-account-kicker">Permanent Action</p>
+      <h2>Delete your JFAM account</h2>
+      <p class="delete-account-copy">
+        Deleting your account permanently removes your JFAM login, profile details, saved delivery addresses, delivery map pin coordinates, cart, and wishlist.
+      </p>
+      <div class="delete-account-warning">
+        <strong>Before you continue:</strong>
+        <ul>
+          <li>This action cannot be undone.</li>
+          <li>Active deliveries or subscriptions will no longer be accessible under this account.</li>
+          <li>Need help instead? Email <strong>jfamown@gmail.com</strong> or call <strong>+91 72309 20774</strong>.</li>
+        </ul>
+      </div>
+
+      <label class="delete-account-label" for="deleteAccountConfirmInput">
+        Type <strong>DELETE</strong> below to confirm:
+      </label>
+      <input
+        type="text"
+        id="deleteAccountConfirmInput"
+        class="delete-account-input"
+        placeholder="Type DELETE"
+        autocomplete="off"
+        autocapitalize="characters"
+      />
+      <p id="deleteAccountStatus" class="delete-account-status" role="status" aria-live="polite"></p>
+      <div class="delete-account-actions">
+        <button type="button" class="delete-account-cancel-btn" data-go-screen="profile">Keep My Account</button>
+        <button type="button" class="delete-account-confirm-btn" id="confirmDeleteAccountBtn">Permanently Delete Account</button>
+      </div>
     </section>
   </div>
 </main>
@@ -1888,7 +1923,7 @@
   </div>
 </main>
 
-<!-- PAYMENT MODE: COD/UPI/card options and payment summary -->
+<!-- PAYMENT MODE: COD checkout and payment summary -->
 <main class="screen" id="payment-mode-screen" data-screen="paymentMode">
   <header class="topbar">
     <button class="icon-btn" data-go-screen="cartAddress">←</button>
@@ -1906,8 +1941,8 @@
       </label>
 
       <div class="milkcash-info">
-        <p class="milkcash-title">Mr.MilkCash</p>
-        <p class="milkcash-sub">Total Active Mr.MilkCash: <span id="milkcash-balance">₹0</span></p>
+        <p class="milkcash-title">JFAM Cash</p>
+        <p class="milkcash-sub">Total Active JFAM Cash: <span id="milkcash-balance">₹0</span></p>
       </div>
 
       <div class="milkcash-saved">
@@ -1922,13 +1957,6 @@
           <button type="button" class="payment-method-tab active" data-payment-method="cod">
             <span>Cash On Delivery<br>(Cash/UPI)</span>
           </button>
-          <button type="button" class="payment-method-tab" data-payment-method="upi">
-            <span>UPI (Pay via any App)</span>
-          </button>
-          <button type="button" class="payment-method-tab payment-method-tab-soon" disabled aria-disabled="true">
-            <span>Credit/Debit Card</span>
-            <small>This feature is coming soon</small>
-          </button>
         </aside>
 
         <div id="paymentMethodContent" class="payment-method-content"></div>
@@ -1939,7 +1967,7 @@
   </div>
 </main>
 
-<!-- UPI QR: UPI payment ke liye QR code screen -->
+<!-- Legacy UPI QR screen retained for existing navigation compatibility. -->
 <main class="screen" id="upi-qr-screen" data-screen="upiQr">
   <div class="upi-qr-shell">
     <aside class="upi-qr-side">
@@ -1951,7 +1979,7 @@
         <span>Total</span>
         <strong id="upiQrTotal">&#8377;0.00</strong>
       </div>
-      <p>Powered by <strong>Paytm</strong></p>
+      <p>Cash on delivery</p>
     </aside>
 
     <section class="upi-qr-panel">
@@ -1968,8 +1996,8 @@
           </div>
           <h3>Other Methods</h3>
           <div class="upi-qr-other upi-qr-other-soon">
-            Debit/Credit Card
-            <small>This feature is coming soon</small>
+            Cash on Delivery
+            <small>Pay by cash or UPI on delivery</small>
           </div>
         </div>
         <div class="upi-qr-card">
@@ -1980,8 +2008,8 @@
           </div>
           <img class="upi-payment-qr" id="upiQrImage" alt="UPI payment QR code">
           <div class="upi-merchant-details">
-            <span id="upiQrMerchant">Mr.Milk</span>
-            <strong id="upiQrUpiId">UPI ID not configured</strong>
+            <span id="upiQrMerchant">JFAM</span>
+            <strong id="upiQrUpiId">Cash on delivery enabled</strong>
           </div>
           <strong class="upi-qr-progress" id="upiQrProgress">Payment in progress</strong>
           <p class="upi-qr-warning" id="upiQrWarning">Do not refresh or redirect while we verify your payment.</p>
@@ -2060,7 +2088,7 @@
 
       <div class="address-heading-row">
         <h3>ADDRESS</h3>
-        <button type="button" class="address-map-btn" data-address-map-prefix="address" title="Open and verify this address on map">📍</button>
+        <button type="button" class="address-map-btn" data-address-map-prefix="address" title="Choose and confirm this delivery point on map">📍 Confirm location</button>
       </div>
       <input type="text" id="addressPincode" value="333031" readonly style="background:#f0f0f0;color:#555;">
 
@@ -2098,7 +2126,7 @@
   <!-- SAVED ADDRESSES -->
   <div id="savedAddresses"></div>
 
-  <button class="checkout-btn" id="proceedCheckoutBtn">Proceed to Checkout</button>
+  <button class="checkout-btn" id="proceedCheckoutBtn">Confirm delivery location &amp; continue</button>
 
 </div>
 
@@ -2176,7 +2204,7 @@
       <div class="address-map-head">
         <div>
           <h3>Select Exact Location</h3>
-          <p>Use your device location or tap the map, then adjust the pin if needed.</p>
+          <p>Use your device location or place the pin, then confirm it before saving your delivery address.</p>
         </div>
         <button type="button" id="addressMapCloseBtn">×</button>
       </div>
@@ -2187,6 +2215,7 @@
         <button type="button" id="addressMapCancelBtn">Cancel</button>
         <button type="button" id="addressMapUseBtn" disabled>Use This Location</button>
       </div>
+      <p class="address-map-google-note">Confirm the pin here. Saved orders include its exact coordinates and a Google Maps link in the admin console.</p>
     </div>
   </div>
   </div>
@@ -2218,9 +2247,9 @@
   <script>
     window.JFAM_UPI_MERCHANT = window.JFAM_UPI_MERCHANT || {
       upiId: "",
-      payeeName: "Mr.Milk",
+      payeeName: "JFAM",
       merchantCode: "",
-      transactionNote: "Mr.Milk order payment"
+      transactionNote: "JFAM order payment"
     };
   </script>
   <script src="./product-images.js?v=20260817-direct-image-slots"></script>

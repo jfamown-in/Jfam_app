@@ -5662,6 +5662,24 @@ button:disabled {
   line-height:1.35;
 }
 
+.address-map-google-note,
+.address-coordinate-confirmation{
+  margin:0;
+  padding:0 14px 12px;
+  color:#475467;
+  font-size:12px;
+  line-height:1.4;
+}
+
+.address-coordinate-confirmation{
+  padding:4px 0;
+  color:#187245;
+}
+
+.address-coordinate-confirmation.needs-confirmation{
+  color:#a04b21;
+}
+
 .address-map-actions{
   display:grid;
   grid-template-columns:repeat(2, minmax(0, 1fr));
@@ -6840,6 +6858,11 @@ button:disabled {
   word-break:break-word;
 }
 
+.upi-open-app-link[hidden],
+.upi-confirm-btn[hidden]{
+  display:none;
+}
+
 .upi-open-app-link{
   display:inline-flex;
   align-items:center;
@@ -7359,4 +7382,121 @@ button:disabled {
   .hover-full-card {
     pointer-events: none;
   }
+}
+
+/* In-app Account Deletion (Google Play policy compliance) */
+.profile-option-danger {
+  color: #b42318;
+}
+.delete-account-shell {
+  padding-bottom: 40px;
+}
+.delete-account-card {
+  background: #ffffff;
+  border: 1px solid #d9e7f2;
+  border-radius: 16px;
+  padding: 20px 18px;
+  margin-top: 14px;
+  box-shadow: 0 6px 20px rgba(22, 48, 70, 0.06);
+}
+.delete-account-kicker {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #b42318;
+}
+.delete-account-card h2 {
+  margin: 0 0 10px;
+  font-size: 20px;
+  color: #163046;
+}
+.delete-account-copy {
+  margin: 0 0 14px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: #4b657a;
+}
+.delete-account-warning {
+  background: #fff6f5;
+  border: 1px solid #f5c2be;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: #5c2a26;
+}
+.delete-account-warning strong {
+  color: #b42318;
+}
+.delete-account-warning ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+.delete-account-warning li {
+  margin-bottom: 4px;
+}
+.delete-account-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  color: #163046;
+  margin-bottom: 8px;
+}
+.delete-account-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border: 1.5px solid #cbd9e6;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #163046;
+}
+.delete-account-input:focus {
+  outline: none;
+  border-color: #b42318;
+}
+.delete-account-status {
+  min-height: 20px;
+  margin: 10px 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4b657a;
+}
+.delete-account-status.is-error {
+  color: #b42318;
+}
+.delete-account-status.is-success {
+  color: #067647;
+}
+.delete-account-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.delete-account-cancel-btn,
+.delete-account-confirm-btn {
+  width: 100%;
+  min-height: 46px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.delete-account-cancel-btn {
+  background: #eaf5fc;
+  color: #163046;
+  border: 1px solid #c5e1f5;
+}
+.delete-account-confirm-btn {
+  background: #b42318;
+  color: #ffffff;
+  border: none;
+}
+.delete-account-confirm-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }

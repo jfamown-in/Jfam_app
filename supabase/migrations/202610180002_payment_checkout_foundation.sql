@@ -414,6 +414,7 @@ declare
   v_unit_price numeric(12,2);
   v_packets integer;
   v_line_total numeric(12,2);
+  v_quantity_multiplier numeric(12,4);
   v_order_total numeric(12,2) := 0;
   v_cod_fee numeric(12,2) := 0;
   v_wallet_requested numeric(12,2) := greatest(0, coalesce(p_milkcash_requested, 0));
@@ -513,7 +514,14 @@ begin
     end if;
 
     v_packets := greatest(1, coalesce(nullif(v_item->>'packets', '')::integer, 1));
-    v_unit_price := public.jfam_plan_price(
+    v_quantity_multiplier := case
+      when lower(trim(coalesce(v_item->>'quantity', ''))) in ('0.1', '.1', '100g', '100 g') then 0.1
+      when lower(trim(coalesce(v_item->>'quantity', ''))) in ('0.25', '.25', '250ml', '250 ml', '250g', '250 g') then 0.25
+      when lower(trim(coalesce(v_item->>'quantity', ''))) in ('0.5', '.5', '500ml', '500 ml', '500g', '500 g') then 0.5
+      when lower(trim(coalesce(v_item->>'quantity', ''))) in ('1', '1l', '1 l', '1 litre', '1kg', '1 kg') then 1
+      else 1
+    end;
+    v_unit_price := round(public.jfam_plan_price(
       v_product.monthly_price,
       v_product.fifteen_day_price,
       v_product.weekly_price,
@@ -521,7 +529,7 @@ begin
       v_product.custom_price,
       v_product.default_price,
       v_item->>'plan'
-    );
+    ) * v_quantity_multiplier, 2);
     v_line_total := round(v_unit_price * v_packets, 2);
     v_order_total := v_order_total + v_line_total;
 
@@ -575,7 +583,14 @@ begin
     limit 1;
 
     v_packets := greatest(1, coalesce(nullif(v_item->>'packets', '')::integer, 1));
-    v_unit_price := public.jfam_plan_price(
+    v_quantity_multiplier := case
+      when lower(trim(coalesce(v_item->>'quantity', ''))) in ('0.1', '.1', '100g', '100 g') then 0.1
+      when lower(trim(coalesce(v_item->>'quantity', ''))) in ('0.25', '.25', '250ml', '250 ml', '250g', '250 g') then 0.25
+      when lower(trim(coalesce(v_item->>'quantity', ''))) in ('0.5', '.5', '500ml', '500 ml', '500g', '500 g') then 0.5
+      when lower(trim(coalesce(v_item->>'quantity', ''))) in ('1', '1l', '1 l', '1 litre', '1kg', '1 kg') then 1
+      else 1
+    end;
+    v_unit_price := round(public.jfam_plan_price(
       v_product.monthly_price,
       v_product.fifteen_day_price,
       v_product.weekly_price,
@@ -583,7 +598,7 @@ begin
       v_product.custom_price,
       v_product.default_price,
       v_item->>'plan'
-    );
+    ) * v_quantity_multiplier, 2);
     v_line_total := round(v_unit_price * v_packets, 2);
 
     insert into public.order_items (
@@ -593,7 +608,7 @@ begin
     ) values (
       v_order_id, v_user_id, v_index, v_product.product_name, v_line_total,
       v_product.image_url, coalesce(v_item->>'quantity', v_product.unit_label),
-      v_packets, v_item->>'startDate', v_item->>'endDate', v_item->>'slot', v_item->>'plan',
+      v_packets, nullif(v_item->>'startDate', '')::date, nullif(v_item->>'endDate', '')::date, v_item->>'slot', v_item->>'plan',
       v_unit_price, v_line_total,
       jsonb_build_object(
         'product_name', v_product.product_name,
